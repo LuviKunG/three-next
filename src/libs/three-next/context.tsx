@@ -50,11 +50,13 @@ const useThree = (): ThreeContextValue => {
 function ThreeProvider({
   children,
   onCreate,
+  disposeOnError = true,
   color = 0x000000,
   alpha = 0,
 }: {
   children: React.ReactNode;
   onCreate: ThreeInstanceCreationFunction;
+  disposeOnError?: boolean;
   color?: number;
   alpha?: number;
 }) {
@@ -96,6 +98,19 @@ function ThreeProvider({
       rendererRef.current.setClearColor(color, alpha);
     }
   }, [color, alpha]);
+
+  useEffect(() => {
+    if (error && disposeOnError) {
+      if (instanceRef.current) {
+        instanceRef.current.dispose();
+        instanceRef.current = null;
+      }
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        rendererRef.current = null;
+      }
+    }
+  }, [error, disposeOnError]);
 
   // Handle the canvas change and create the Three.js instance using the provided onCreate function, with error handling to catch any issues during initialization.
   useEffect(() => {
@@ -143,15 +158,12 @@ function ThreeProvider({
     if (!canvas) return;
     const handleContextLost = (event: Event) => {
       event.preventDefault();
-      if (instanceRef.current) {
-        console.error('WebGL context lost, disposing instance');
-        instanceRef.current.dispose();
-        instanceRef.current = null;
-      }
-      setError(new WebGLContextLostError('WebGL context lost'));
+      const error = new WebGLContextLostError('WebGL context lost');
+      console.error(error);
+      setError(error);
     };
     const handleContextRestored = () => {
-      console.info('WebGL context restored, resetting error state');
+      console.info('WebGL context restored');
       setError(null);
     };
     canvas.addEventListener('webglcontextlost', handleContextLost, false);
