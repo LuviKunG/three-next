@@ -1,50 +1,27 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useMemo, useCallback } from 'react';
+import * as THREE from 'three';
 
-import { createInstance, type Instance } from '@/core/three';
-
-import { isDebugging } from '@/env';
+import { useThree, ThreeCanvas, ThreeError, ThreeProvider } from '@/libs/three-next';
+import { createInstance } from '@/core/three';
+import useTheme from '@/hooks/useTheme';
 
 function PageContent() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const instanceRef = useRef<Instance | null>(null);
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const { instance } = useThree();
+  const theme = useTheme();
 
-  useEffect(() => {
-    const mediaQuery = globalThis.window.matchMedia('(prefers-color-scheme: dark)');
+  const renderer: THREE.WebGLRenderer | undefined = useMemo(() => instance?.renderer, [instance]);
 
-    const updateTheme = (matchesDark: boolean) => {
-      setTheme(matchesDark ? 'dark' : 'light');
-    };
-
-    updateTheme(mediaQuery.matches);
-
-    const handleChange = (event: MediaQueryListEvent) => {
-      updateTheme(event.matches);
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    // Pass the global window object to the createInstance function
-    const window = globalThis.window;
-
-    const instance = createInstance(window, document, canvasRef.current);
-
-    instanceRef.current = instance;
-
-    return () => {
-      instanceRef.current?.dispose();
-    };
-  }, []);
+  const forceLostContext = useCallback(() => {
+    if (renderer) {
+      const gl = renderer.getContext();
+      const ext = gl.getExtension('WEBGL_lose_context');
+      if (ext) {
+        ext.loseContext();
+      }
+    }
+  }, [renderer]);
 
   return (
     <div
@@ -53,7 +30,17 @@ function PageContent() {
       }`}
     >
       <div className='absolute top-0 left-0 h-screen w-screen'>
-        <canvas className='h-full w-full' ref={canvasRef} />
+        <ThreeCanvas className='h-full w-full' />
+        <ThreeError className='absolute top-0 left-0 h-full w-full flex items-center justify-center p-4'>
+          <div className='max-w-md rounded-lg border p-6 text-center shadow-lg backdrop-blur-sm'>
+            <h2 className='mb-4 text-2xl font-bold'>
+              An error occurred while loading the 3D scene.
+            </h2>
+            <p className='text-sm text-gray-500'>
+              Please try refreshing the page or check your browser console for more details.
+            </p>
+          </div>
+        </ThreeError>
       </div>
       <div
         className={`absolute top-4 left-4 z-10 rounded-2xl border p-4 shadow-lg backdrop-blur ${
@@ -61,11 +48,22 @@ function PageContent() {
             ? 'border-white/10 bg-slate-900/65 text-slate-100'
             : 'border-slate-300/70 bg-white/75 text-slate-900'
         }`}
-      ></div>
+      >
+        <button
+          onClick={forceLostContext}
+          className='rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600'
+        >
+          Force Lost Context
+        </button>
+      </div>
     </div>
   );
 }
 
 export default function Home() {
-  return <PageContent />;
+  return (
+    <ThreeProvider onCreate={createInstance}>
+      <PageContent />
+    </ThreeProvider>
+  );
 }

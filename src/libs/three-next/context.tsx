@@ -15,7 +15,7 @@ export interface ThreeContextValue {
 const ThreeContext = createContext<ThreeContextValue | undefined>(undefined);
 
 // Custom hook to access the Three.js context, ensuring it's used within a provider.
-export const useThree = (): ThreeContextValue => {
+const useThree = (): ThreeContextValue => {
   const context = useContext(ThreeContext);
   if (!context) {
     throw new Error('useThree must be used within a ThreeProvider');
@@ -24,7 +24,7 @@ export const useThree = (): ThreeContextValue => {
 };
 
 // Provider component that initializes the Three.js instance and manages its lifecycle, including error handling and context loss/restoration.
-export function ThreeProvider({
+function ThreeProvider({
   onCreate,
   children,
 }: {
@@ -90,3 +90,6 @@ export function ThreeProvider({
   };
   return <ThreeContext.Provider value={contextValue}>{children}</ThreeContext.Provider>;
 }
+
+export default ThreeProvider;
+export { useThree };
