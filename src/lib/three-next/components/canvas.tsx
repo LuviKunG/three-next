@@ -1,6 +1,7 @@
 'use client';
 
-import { useThree } from './context';
+import React from 'react';
+import { useThree } from '../context';
 
 function ThreeCanvas(props: React.CanvasHTMLAttributes<HTMLCanvasElement>) {
   const { canvasObserverRef, error } = useThree();

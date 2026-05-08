@@ -1,5 +1,7 @@
+'use client';
+
 import React from 'react';
-import { useThree } from './context';
+import { useThree } from '../context';
 
 function ThreeError(props: React.HTMLAttributes<HTMLDivElement>) {
   const { error } = useThree();

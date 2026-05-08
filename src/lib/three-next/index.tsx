@@ -5,8 +5,7 @@ import ThreeProvider, {
   type ThreeCanvasObserverFunction,
   type ThreeContextValue,
 } from './context';
-import ThreeCanvas from './canvas';
-import ThreeError from './error';
+import { ThreeCanvas, ThreeError } from './components/';
 import type { ThreeInstance } from './types';
 
 export {
