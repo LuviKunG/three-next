@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 
 type ThreeInstance = {
-  renderer?: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.Camera;
+  update: (delta: number) => void;
+  onResize: (canvas: HTMLCanvasElement) => void;
   dispose: () => void;
 };
 

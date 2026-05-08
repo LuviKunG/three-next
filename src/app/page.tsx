@@ -7,18 +7,23 @@ import { createInstance, type Instance } from '@/core/three';
 import useTheme from '@/hooks/useTheme';
 
 function PageContent() {
-  const { instanceRef, resetError } = useThree();
+  // Access the Three.js instance and related functions from the context.
+  const { rendererRef, instanceRef, optionsRef, resetError } = useThree();
+  // Access the current theme (light/dark) for styling purposes.
   const theme = useTheme();
 
+  // State for camera position controls
   const [cameraPositionY, setCameraPositionY] = useState<number>(0);
+  // State for camera distance control
   const [cameraPositionZ, setCameraPositionZ] = useState<number>(5);
 
+  // Function to force a lost WebGL context on the Three.js instance, with error handling if the instance or renderer is not available.
   const forceLostContext = useCallback(() => {
     if (!instanceRef.current) {
       console.warn('Instance not available to force lost context');
       return;
     }
-    const { renderer } = instanceRef.current;
+    const renderer = rendererRef.current;
     if (!renderer) {
       console.warn('Renderer not available to force lost context');
       return;
@@ -28,32 +33,16 @@ function PageContent() {
     if (ext) {
       ext.loseContext();
     }
-  }, [instanceRef]);
+  }, [rendererRef, instanceRef]);
 
-  const restoreContext = useCallback(() => {
-    if (!instanceRef.current) {
-      console.warn('Instance not available to restore context');
-      return;
-    }
-    const { renderer } = instanceRef.current;
-    if (!renderer) {
-      console.warn('Renderer not available to restore context');
-      return;
-    }
-    const gl = renderer.getContext();
-    const ext = gl.getExtension('WEBGL_lose_context');
-    if (ext) {
-      ext.restoreContext();
-    }
-  }, [instanceRef]);
-
+  // Utility function to simulate a lost WebGL context after a specified delay, then automatically restore it.
   const timeoutLostContext = useCallback(
     (delay: number) => {
       if (!instanceRef.current) {
         console.warn('Instance not available to force lost context');
         return;
       }
-      const { renderer } = instanceRef.current;
+      const renderer = rendererRef.current;
       if (!renderer) {
         console.warn('Renderer not available to force lost context');
         return;
@@ -67,9 +56,21 @@ function PageContent() {
         }, delay);
       }
     },
-    [instanceRef]
+    [rendererRef, instanceRef]
   );
 
+  // Update optionsRef with the latest camera position whenever it changes
+  useEffect(() => {
+    optionsRef.current = {
+      cameraPosition: {
+        x: 0,
+        y: cameraPositionY,
+        z: cameraPositionZ,
+      },
+    };
+  }, [cameraPositionY, cameraPositionZ, optionsRef]);
+
+  // Update camera position on the Three.js instance whenever the camera position state changes.
   useEffect(() => {
     if (!instanceRef.current) return;
     const { setCameraPosition } = instanceRef.current as Instance;
@@ -114,12 +115,6 @@ function PageContent() {
             className='rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600'
           >
             Force Lost Context
-          </button>
-          <button
-            onClick={restoreContext}
-            className='rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600'
-          >
-            Restore Context
           </button>
           <button
             onClick={() => timeoutLostContext(1000)}
@@ -171,6 +166,7 @@ function PageContent() {
 }
 
 export default function Home() {
+  // Render the ThreeProvider at the root of the component tree, passing the createInstance function to initialize the Three.js instance, and render the PageContent inside it.
   return (
     <ThreeProvider onCreate={createInstance}>
       <PageContent />

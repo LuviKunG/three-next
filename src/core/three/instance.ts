@@ -3,39 +3,25 @@ import * as THREE from 'three';
 import { isDebugging } from '@/env';
 
 interface Instance {
-  renderer: THREE.WebGLRenderer;
-  setCameraPosition: (x: number, y: number, z: number) => void;
+  scene: THREE.Scene;
+  camera: THREE.Camera;
+  update: (delta: number) => void;
+  onResize: (canvas: HTMLCanvasElement) => void;
   dispose: () => void;
+  setCameraPosition: (x: number, y: number, z: number) => void;
 }
 
-const createInstance = (
-  window: Window,
-  document: Document,
-  canvas: HTMLCanvasElement
-): Instance => {
-  // renderer
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: true,
-  });
-
-  renderer.setClearColor(0x000000, 0);
-
-  const updateRendererSize = () => {
-    const rect = canvas.getBoundingClientRect();
-    renderer.setSize(rect.width, rect.height, false);
-  };
-
+const createInstance = (options?: unknown): Instance => {
   // root scene
   const scene = new THREE.Scene();
 
   // camera
   const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
 
-  const updateCameraAspect = () => {
+  const onResize = (canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
-    camera.aspect = rect.width / rect.height;
+    const aspect = rect.width / rect.height;
+    camera.aspect = aspect;
     camera.updateProjectionMatrix();
   };
 
@@ -44,8 +30,9 @@ const createInstance = (
   };
 
   // initial camera position
-  const cameraPosition = { x: 0, y: 0, z: 5 };
-  setCameraPosition(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+  const cameraOptions = options as { cameraPosition?: { x: number; y: number; z: number } };
+  const initialCameraPosition = cameraOptions?.cameraPosition || { x: 0, y: 0, z: 5 };
+  setCameraPosition(initialCameraPosition.x, initialCameraPosition.y, initialCameraPosition.z);
 
   scene.add(camera);
 
@@ -71,39 +58,15 @@ const createInstance = (
     cube.rotation.y += anglePerFrame;
   };
 
-  // update handler
-  const timer = new THREE.Timer();
-
-  timer.connect(document);
-
-  let animationFrameId: number;
-
-  const update = (time: DOMHighResTimeStamp) => {
-    animationFrameId = requestAnimationFrame(update);
-    timer.update(time);
-    const delta = timer.getDelta();
+  // Main update function that will be called on each animation frame, which currently updates the cube's rotation.
+  const update = (delta: number) => {
     updateCube(delta);
-    renderer.render(scene, camera);
   };
 
-  animationFrameId = requestAnimationFrame(update);
-
-  // resize handler
-  const onResize = () => {
-    updateRendererSize();
-    updateCameraAspect();
-  };
-
-  window.addEventListener('resize', onResize);
-
-  // call it once to set initial size
-  onResize();
-
-  // dispose function
+  // Function to handle canvas resizing, updating the camera's aspect ratio and projection matrix accordingly.
   const dispose = () => {
-    renderer.dispose();
-    window.removeEventListener('resize', onResize);
-    cancelAnimationFrame(animationFrameId);
+    geometry.dispose();
+    material.dispose();
   };
 
   // create a welcome message in the console with styling
@@ -115,9 +78,12 @@ const createInstance = (
   }
 
   return {
-    renderer,
-    setCameraPosition,
+    scene,
+    camera,
+    update,
+    onResize,
     dispose,
+    setCameraPosition,
   };
 };
 

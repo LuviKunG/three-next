@@ -1,13 +1,27 @@
 'use client';
 
 import React, { createContext, useState, useRef, useContext, useEffect, useCallback } from 'react';
+import * as THREE from 'three';
 
 import { type ThreeInstance } from './types';
 
-export interface ThreeContextValue {
-  onCreate: (window: Window, document: Document, canvas: HTMLCanvasElement) => ThreeInstance;
-  canvasObserverRef: (canvas: HTMLCanvasElement | null) => void;
+class WebGLContextLostError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WebGLContextLostError';
+  }
+}
+
+type ThreeInstanceCreationFunction = (options?: unknown) => ThreeInstance;
+
+type ThreeCanvasObserverFunction = (canvas: HTMLCanvasElement | null) => void;
+
+interface ThreeContextValue {
+  onCreate: ThreeInstanceCreationFunction;
+  canvasObserverRef: ThreeCanvasObserverFunction;
+  rendererRef: React.RefObject<THREE.WebGLRenderer | null>;
   instanceRef: React.RefObject<ThreeInstance | null>;
+  optionsRef: React.RefObject<unknown>;
   error?: Error | null;
   resetError?: () => void;
 }
@@ -26,33 +40,92 @@ const useThree = (): ThreeContextValue => {
 
 // Provider component that initializes the Three.js instance and manages its lifecycle, including error handling and context loss/restoration.
 function ThreeProvider({
-  onCreate,
   children,
+  onCreate,
+  color = 0x000000,
+  alpha = 0,
 }: {
-  onCreate: (window: Window, document: Document, canvas: HTMLCanvasElement) => ThreeInstance;
   children: React.ReactNode;
+  onCreate: ThreeInstanceCreationFunction;
+  color?: number;
+  alpha?: number;
 }) {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [error, setError] = React.useState<Error | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const instanceRef = useRef<ThreeInstance | null>(null);
+  const optionsRef = useRef<unknown>(null);
 
   // Callback ref to observe the canvas element and create the Three.js instance when the canvas is available.
-  const canvasObserverRef = useCallback(
-    (observedCanvas: HTMLCanvasElement | null) => {
-      if (!observedCanvas) return;
-      setCanvas(observedCanvas);
-      if (instanceRef.current) return;
-      try {
-        const window = globalThis.window;
-        const document = globalThis.document;
-        const newInstance = onCreate(window, document, observedCanvas);
-        instanceRef.current = newInstance;
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-      }
+  const canvasObserverRef = useCallback((observedCanvas: HTMLCanvasElement | null) => {
+    if (!observedCanvas) return;
+    setCanvas(observedCanvas);
+  }, []);
+
+  const createRenderer = useCallback(
+    (canvas: HTMLCanvasElement) => {
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: alpha > 0 });
+      renderer.setClearColor(color, alpha);
+      const rect = canvas.getBoundingClientRect();
+      renderer.setSize(rect.width, rect.height, false);
+      return renderer;
     },
-    [onCreate]
+    [color, alpha]
   );
+
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.dispose();
+      rendererRef.current = null;
+    }
+    if (!canvas) return;
+    const renderer = createRenderer(canvas);
+    rendererRef.current = renderer;
+  }, [canvas, createRenderer]);
+
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.setClearColor(color, alpha);
+    }
+  }, [color, alpha]);
+
+  // Handle the canvas change and create the Three.js instance using the provided onCreate function, with error handling to catch any issues during initialization.
+  useEffect(() => {
+    if (!canvas) return;
+    if (instanceRef.current) return;
+    try {
+      const newInstance = onCreate(optionsRef.current);
+      newInstance.onResize(canvas);
+      instanceRef.current = newInstance;
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    }
+  }, [canvas, onCreate]);
+
+  // Set up the animation loop using THREE.Timer to call the update function on each frame, and ensure proper cleanup when the component unmounts.
+  useEffect(() => {
+    const document = globalThis.document;
+    const timer = new THREE.Timer();
+    timer.connect(document);
+    let animationFrameId: number;
+    const animate = (timestamp: number) => {
+      timer.update(timestamp);
+      if (instanceRef.current) {
+        const { scene, camera, update } = instanceRef.current;
+        update(timer.getDelta());
+        if (rendererRef.current) {
+          rendererRef.current.render(scene, camera);
+        }
+      }
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    animationFrameId = requestAnimationFrame(animate);
+    return () => {
+      timer.disconnect();
+      timer.dispose();
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
 
   // Listen for WebGL context loss and restoration events to handle errors gracefully.
   useEffect(() => {
@@ -64,7 +137,7 @@ function ThreeProvider({
         instanceRef.current.dispose();
         instanceRef.current = null;
       }
-      setError(new Error('WebGL context lost'));
+      setError(new WebGLContextLostError('WebGL context lost'));
     };
     const handleContextRestored = () => {
       console.info('WebGL context restored, resetting error state');
@@ -78,19 +151,40 @@ function ThreeProvider({
     };
   }, [canvas]);
 
+  // Listen the resize event on the canvas to update the Three.js instance's camera and renderer dimensions accordingly.
+  useEffect(() => {
+    if (!canvas) return;
+    const handleResize = () => {
+      if (instanceRef.current) {
+        instanceRef.current.onResize(canvas);
+      }
+      if (rendererRef.current) {
+        const rect = canvas.getBoundingClientRect();
+        rendererRef.current.setSize(rect.width, rect.height, false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [canvas]);
+
   const resetError = () => {
     setError(null);
   };
 
   const contextValue: ThreeContextValue = {
     onCreate,
-    error,
-    instanceRef,
     canvasObserverRef,
+    rendererRef,
+    instanceRef,
+    optionsRef,
+    error,
     resetError,
   };
   return <ThreeContext.Provider value={contextValue}>{children}</ThreeContext.Provider>;
 }
 
 export default ThreeProvider;
-export { useThree };
+export type { ThreeInstanceCreationFunction, ThreeCanvasObserverFunction, ThreeContextValue };
+export { useThree, WebGLContextLostError };
