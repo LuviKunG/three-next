@@ -60,6 +60,7 @@ const createInstance = (options?: unknown): Instance => {
 
   // Main update function that will be called on each animation frame, which currently updates the cube's rotation.
   const update = (delta: number) => {
+    console.log(`Updating scene with delta time: ${delta.toFixed(4)} seconds`);
     updateCube(delta);
   };
 

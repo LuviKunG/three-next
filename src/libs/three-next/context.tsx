@@ -1,6 +1,14 @@
 'use client';
 
-import React, { createContext, useState, useRef, useContext, useEffect, useCallback } from 'react';
+import React, {
+  createContext,
+  useState,
+  useRef,
+  useContext,
+  useEffect,
+  useCallback,
+  startTransition,
+} from 'react';
 import * as THREE from 'three';
 
 import { type ThreeInstance } from './types';
@@ -98,7 +106,7 @@ function ThreeProvider({
       newInstance.onResize(canvas);
       instanceRef.current = newInstance;
     } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)));
+      startTransition(() => setError(err instanceof Error ? err : new Error(String(err))));
     }
   }, [canvas, onCreate]);
 
@@ -112,9 +120,12 @@ function ThreeProvider({
       timer.update(timestamp);
       if (instanceRef.current) {
         const { scene, camera, update } = instanceRef.current;
-        update(timer.getDelta());
-        if (rendererRef.current) {
-          rendererRef.current.render(scene, camera);
+        const delta = timer.getDelta();
+        if (delta > 0) {
+          update(delta);
+          if (rendererRef.current) {
+            rendererRef.current.render(scene, camera);
+          }
         }
       }
       animationFrameId = requestAnimationFrame(animate);
