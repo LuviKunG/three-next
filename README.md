@@ -435,3 +435,9 @@ import {
 - `rendererRef` and `instanceRef` are also mutable refs. Reading `.current` outside of React effects is safe for imperative operations (e.g. forcing context loss in tests).
 - `devicePixelRatio` is set automatically from `window.devicePixelRatio` when the renderer is created. You do not need to set it yourself.
 - The `window` and `document` props default to `globalThis.window` and `globalThis.document`. Pass custom references when testing in a non-browser environment (e.g. jsdom) or when you need to scope event listeners to a specific window (e.g. iframes).
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE.md](LICENSE.md) file for details.
