@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-import { useThree, ThreeCanvas, ThreeError, ThreeProvider } from '@/lib/three-next';
+import { useThree, ThreeCanvas, ThreeProvider } from '@/lib/three-next';
 import { createInstance, type Instance } from '@/core/three';
 import useTheme from '@/hooks/useTheme';
 
@@ -84,26 +84,6 @@ function PageContent() {
       }`}
     >
       <div className='absolute top-0 left-0 h-screen w-screen'>
-        {/* Using the ThreeError component is optional for displaying an error.
-        <ThreeCanvas className='h-full w-full' />
-        <ThreeError className='absolute top-0 left-0 h-full w-full flex items-center justify-center p-4'>
-          <div className='max-w-md rounded-lg border p-6 text-center shadow-lg backdrop-blur-sm'>
-            <h2 className='mb-4 text-2xl font-bold'>
-              An error occurred while loading the 3D scene.
-            </h2>
-            <p className='text-sm text-gray-500'>
-              Please try refreshing the page or check your browser console for more details.
-            </p>
-            <button
-              onClick={resetError}
-              className='mt-6 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600'
-            >
-              Retry
-            </button>
-          </div>
-        </ThreeError>
-        */}
-        {/** Or using 'error' state directly */}
         {error ? (
           <div className='absolute top-0 left-0 h-full w-full flex items-center justify-center p-4'>
             <div className='max-w-md rounded-lg border p-6 text-center shadow-lg backdrop-blur-sm'>
@@ -113,6 +93,11 @@ function PageContent() {
               <p className='text-sm text-gray-500'>
                 Please try refreshing the page or check your browser console for more details.
               </p>
+              <pre
+                className={`mt-4 overflow-x-auto rounded p-3 text-left text-xs text-red-500 ${theme === 'dark' ? 'bg-slate-800' : 'bg-gray-100'}`}
+              >
+                {error.message}
+              </pre>
               <button
                 onClick={resetError}
                 className='mt-6 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600'
@@ -197,8 +182,7 @@ export default function Home() {
       document={document}
       onCreate={createInstance}
       disposeOnError={true}
-      alpha={1}
-      color={0x333333}
+      alpha={0}
     >
       <PageContent />
     </ThreeProvider>
