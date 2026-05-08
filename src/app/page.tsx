@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-import { useThree, ThreeCanvas, ThreeError, ThreeProvider } from '@/libs/three-next';
+import { useThree, ThreeCanvas, ThreeError, ThreeProvider } from '@/lib/three-next';
 import { createInstance, type Instance } from '@/core/three';
 import useTheme from '@/hooks/useTheme';
 
@@ -168,7 +168,7 @@ function PageContent() {
 export default function Home() {
   // Render the ThreeProvider at the root of the component tree, passing the createInstance function to initialize the Three.js instance, and render the PageContent inside it.
   return (
-    <ThreeProvider onCreate={createInstance} disposeOnError={false} alpha={1} color={0x333333}>
+    <ThreeProvider onCreate={createInstance} disposeOnError={true} alpha={1} color={0x333333}>
       <PageContent />
     </ThreeProvider>
   );
