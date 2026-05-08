@@ -8,7 +8,7 @@ import useTheme from '@/hooks/useTheme';
 
 function PageContent() {
   // Access the Three.js instance and related functions from the context.
-  const { rendererRef, instanceRef, optionsRef, resetError } = useThree();
+  const { rendererRef, instanceRef, optionsRef, error, resetError } = useThree();
   // Access the current theme (light/dark) for styling purposes.
   const theme = useTheme();
 
@@ -84,6 +84,7 @@ function PageContent() {
       }`}
     >
       <div className='absolute top-0 left-0 h-screen w-screen'>
+        {/* Using the ThreeError component is optional for displaying an error.
         <ThreeCanvas className='h-full w-full' />
         <ThreeError className='absolute top-0 left-0 h-full w-full flex items-center justify-center p-4'>
           <div className='max-w-md rounded-lg border p-6 text-center shadow-lg backdrop-blur-sm'>
@@ -101,6 +102,28 @@ function PageContent() {
             </button>
           </div>
         </ThreeError>
+        */}
+        {/** Or using 'error' state directly */}
+        {error ? (
+          <div className='absolute top-0 left-0 h-full w-full flex items-center justify-center p-4'>
+            <div className='max-w-md rounded-lg border p-6 text-center shadow-lg backdrop-blur-sm'>
+              <h2 className='mb-4 text-2xl font-bold'>
+                An error occurred while loading the 3D scene.
+              </h2>
+              <p className='text-sm text-gray-500'>
+                Please try refreshing the page or check your browser console for more details.
+              </p>
+              <button
+                onClick={resetError}
+                className='mt-6 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600'
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : (
+          <ThreeCanvas className='h-full w-full' />
+        )}
       </div>
       <div
         className={`absolute top-4 left-4 z-10 rounded-2xl border p-4 shadow-lg backdrop-blur ${
@@ -167,8 +190,16 @@ function PageContent() {
 
 export default function Home() {
   // Render the ThreeProvider at the root of the component tree, passing the createInstance function to initialize the Three.js instance, and render the PageContent inside it.
+  const { window, document } = globalThis;
   return (
-    <ThreeProvider onCreate={createInstance} disposeOnError={true} alpha={1} color={0x333333}>
+    <ThreeProvider
+      window={window}
+      document={document}
+      onCreate={createInstance}
+      disposeOnError={true}
+      alpha={1}
+      color={0x333333}
+    >
       <PageContent />
     </ThreeProvider>
   );

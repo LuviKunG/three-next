@@ -50,12 +50,16 @@ const useThree = (): ThreeContextValue => {
 function ThreeProvider({
   children,
   onCreate,
+  window = globalThis.window,
+  document = globalThis.document,
   disposeOnError = true,
   color = 0x000000,
   alpha = 0,
 }: {
   children: React.ReactNode;
   onCreate: ThreeInstanceCreationFunction;
+  window: Window;
+  document: Document;
   disposeOnError?: boolean;
   color?: number;
   alpha?: number;
@@ -78,9 +82,10 @@ function ThreeProvider({
       renderer.setClearColor(color, alpha);
       const rect = canvas.getBoundingClientRect();
       renderer.setSize(rect.width, rect.height, false);
+      renderer.setPixelRatio(window.devicePixelRatio);
       return renderer;
     },
-    [color, alpha]
+    [window, color, alpha]
   );
 
   useEffect(() => {
@@ -127,7 +132,6 @@ function ThreeProvider({
 
   // Set up the animation loop using THREE.Timer to call the update function on each frame, and ensure proper cleanup when the component unmounts.
   useEffect(() => {
-    const document = globalThis.document;
     const timer = new THREE.Timer();
     timer.connect(document);
     let animationFrameId: number;
@@ -151,7 +155,7 @@ function ThreeProvider({
       timer.dispose();
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [document]);
 
   // Listen for WebGL context loss and restoration events to handle errors gracefully.
   useEffect(() => {
@@ -190,7 +194,7 @@ function ThreeProvider({
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [canvas]);
+  }, [window, canvas]);
 
   const resetError = () => {
     setError(null);
