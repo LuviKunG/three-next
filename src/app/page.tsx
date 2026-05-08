@@ -1,27 +1,80 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
-import * as THREE from 'three';
+import { useState, useEffect, useCallback } from 'react';
 
 import { useThree, ThreeCanvas, ThreeError, ThreeProvider } from '@/libs/three-next';
-import { createInstance } from '@/core/three';
+import { createInstance, type Instance } from '@/core/three';
 import useTheme from '@/hooks/useTheme';
 
 function PageContent() {
-  const { instance } = useThree();
+  const { instanceRef, resetError } = useThree();
   const theme = useTheme();
 
-  const renderer: THREE.WebGLRenderer | undefined = useMemo(() => instance?.renderer, [instance]);
+  const [cameraPositionY, setCameraPositionY] = useState<number>(0);
+  const [cameraPositionZ, setCameraPositionZ] = useState<number>(5);
 
   const forceLostContext = useCallback(() => {
-    if (renderer) {
+    if (!instanceRef.current) {
+      console.warn('Instance not available to force lost context');
+      return;
+    }
+    const { renderer } = instanceRef.current;
+    if (!renderer) {
+      console.warn('Renderer not available to force lost context');
+      return;
+    }
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_lose_context');
+    if (ext) {
+      ext.loseContext();
+    }
+  }, [instanceRef]);
+
+  const restoreContext = useCallback(() => {
+    if (!instanceRef.current) {
+      console.warn('Instance not available to restore context');
+      return;
+    }
+    const { renderer } = instanceRef.current;
+    if (!renderer) {
+      console.warn('Renderer not available to restore context');
+      return;
+    }
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_lose_context');
+    if (ext) {
+      ext.restoreContext();
+    }
+  }, [instanceRef]);
+
+  const timeoutLostContext = useCallback(
+    (delay: number) => {
+      if (!instanceRef.current) {
+        console.warn('Instance not available to force lost context');
+        return;
+      }
+      const { renderer } = instanceRef.current;
+      if (!renderer) {
+        console.warn('Renderer not available to force lost context');
+        return;
+      }
       const gl = renderer.getContext();
       const ext = gl.getExtension('WEBGL_lose_context');
       if (ext) {
         ext.loseContext();
+        setTimeout(() => {
+          ext.restoreContext();
+        }, delay);
       }
-    }
-  }, [renderer]);
+    },
+    [instanceRef]
+  );
+
+  useEffect(() => {
+    if (!instanceRef.current) return;
+    const { setCameraPosition } = instanceRef.current as Instance;
+    setCameraPosition(0, cameraPositionY, cameraPositionZ);
+  }, [cameraPositionY, cameraPositionZ, instanceRef]);
 
   return (
     <div
@@ -39,6 +92,12 @@ function PageContent() {
             <p className='text-sm text-gray-500'>
               Please try refreshing the page or check your browser console for more details.
             </p>
+            <button
+              onClick={resetError}
+              className='mt-6 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600'
+            >
+              Retry
+            </button>
           </div>
         </ThreeError>
       </div>
@@ -49,12 +108,63 @@ function PageContent() {
             : 'border-slate-300/70 bg-white/75 text-slate-900'
         }`}
       >
-        <button
-          onClick={forceLostContext}
-          className='rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600'
-        >
-          Force Lost Context
-        </button>
+        <div className='flex flex-col gap-2'>
+          <button
+            onClick={forceLostContext}
+            className='rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600'
+          >
+            Force Lost Context
+          </button>
+          <button
+            onClick={restoreContext}
+            className='rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600'
+          >
+            Restore Context
+          </button>
+          <button
+            onClick={() => timeoutLostContext(1000)}
+            className='rounded bg-yellow-500 px-4 py-2 text-white hover:bg-yellow-600'
+          >
+            Timeout Lost Context (1 seconds)
+          </button>
+        </div>
+        <div className='mt-4 border-t border-gray-300/40 pt-4'>
+          <p className='mb-3 text-xs font-semibold uppercase tracking-widest opacity-60'>
+            Camera Controls
+          </p>
+          <div className='flex flex-col gap-4'>
+            <div>
+              <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+                <span>Vertical (Y)</span>
+                <span className='font-mono'>{cameraPositionY.toFixed(1)}</span>
+              </div>
+              <input
+                type='range'
+                min={-10}
+                max={10}
+                step={0.1}
+                value={cameraPositionY}
+                onChange={e => setCameraPositionY(parseFloat(e.target.value))}
+                className='w-full accent-blue-500'
+              />
+            </div>
+            <div>
+              <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+                <span>Distance (Z)</span>
+                <span className='font-mono'>{cameraPositionZ.toFixed(1)}</span>
+              </div>
+              <input
+                type='range'
+                min={1}
+                max={20}
+                step={0.1}
+                value={cameraPositionZ}
+                onChange={e => setCameraPositionZ(parseFloat(e.target.value))}
+                className='w-full accent-blue-500'
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
