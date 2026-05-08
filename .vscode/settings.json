@@ -1,0 +1,78 @@
+{
+  // Hide common Next.js project files and folders from the file explorer
+  "files.exclude": {
+    // Build outputs and generated files
+    ".next": true,
+    "out": true,
+    "dist": true,
+    "build": true,
+    // Dependencies
+    "node_modules": true,
+    // Cache directories
+    ".turbo": true,
+    ".swc": true,
+    ".vercel": true,
+    ".eslintcache": true,
+    // Auto-generated files
+    "next-env.d.ts": true,
+    // Lock files (keep one visible based on your package manager)
+    "package-lock.json": false, // Set to true if using yarn or pnpm
+    "yarn.lock": true, // Set to false if using npm yarn
+    "pnpm-lock.yaml": true, // Set to false if using pnpm
+    // Environment files (local variants)
+    ".env.local": true,
+    ".env.*.local": true,
+    // Version control (usually hidden by default)
+    ".git": true,
+    ".gitignore": false, // Keep visible for editing
+    // IDE and editor files
+    ".vscode/launch.json": false, // Keep debugging configs visible
+    ".vscode/tasks.json": false, // Keep task configs visible
+    "*.log": true,
+    "*.tsbuildinfo": true,
+    ".vscode": true, // Hide the .vscode folder itself, but keep important files visible
+    ".husky": true // Hide husky hooks if using husky for git hooks
+  },
+  // Exclude the same patterns from search results
+  "search.exclude": {
+    ".next": true,
+    "out": true,
+    "dist": true,
+    "build": true,
+    "node_modules": true,
+    ".turbo": true,
+    ".swc": true,
+    ".vercel": true,
+    ".eslintcache": true,
+    "package-lock.json": true,
+    "yarn.lock": true,
+    "pnpm-lock.yaml": true,
+    "*.log": true,
+    "*.tsbuildinfo": true
+  },
+  // Improve performance by not watching these directories for changes
+  "files.watcherExclude": {
+    "**/.next/**": true,
+    "**/out/**": true,
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/node_modules/**": true,
+    "**/.turbo/**": true,
+    "**/.swc/**": true,
+    "**/.vercel/**": true,
+    "**/*.log": true,
+    "**/*.tsbuildinfo": true
+  },
+  // Hide certain file types in explorer
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json,yarn.lock,pnpm-lock.yaml,.npmrc,.yarnrc*,pnpm-workspace.yaml",
+    "next.config.*": "next-env.d.ts",
+    "tailwind.config.*": "postcss.config.*",
+    "tsconfig.json": "tsconfig.*.json",
+    ".eslintrc.*": ".eslintignore,.eslintcache",
+    ".env": ".env.*",
+    "README.md": "*.md"
+  }
+}
