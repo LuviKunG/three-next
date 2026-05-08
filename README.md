@@ -1,36 +1,437 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# three-next
 
-## Getting Started
+A lightweight React/Next.js integration layer for Three.js. It manages the WebGL renderer lifecycle, animation loop, resize handling, WebGL context loss/restoration, and error boundaries — so you only need to implement your scene logic.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Architecture Overview
+
+```
+ThreeProvider          – owns the renderer, animation loop, and error state
+  ├── ThreeErrorBoundary – catches React render errors and funnels them to error state
+  ├── ThreeCanvas        – renders <canvas>, hidden when error is present
+  ├── ThreeError         – renders children only when error is present (optional)
+  └── (your UI)          – access context via useThree()
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The provider calls your `onCreate` factory once to create a `ThreeInstance`. It then drives the render loop itself (`requestAnimationFrame` → `instance.update?.(delta)` → `renderer.render(scene, camera)`). You never manage the loop.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Core Concept: ThreeInstance
 
-## Learn More
+Everything revolves around the `ThreeInstance` interface. You implement it; the provider consumes it.
 
-To learn more about Next.js, take a look at the following resources:
+```ts
+// src/lib/three-next/types.d.ts
+type ThreeInstance = {
+  scene: THREE.Scene; // required
+  camera: THREE.Camera; // required
+  dispose: () => void; // required — release GPU resources
+  update?: (delta: number) => void; // optional — called every frame; delta is seconds
+  onResize?: (canvas: HTMLCanvasElement) => void; // optional — called on mount and window resize
+  onRendererUpdated?: (renderer: THREE.WebGLRenderer) => void; // optional — called when renderer is created or recreated
+  onError?: (error: Error) => void; // optional — called before dispose when an error occurs
+};
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Only `scene`, `camera`, and `dispose` are required. All lifecycle hooks are optional — implement only what you need.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Your factory function signature must match:
 
-## Deploy on Vercel
+```ts
+type ThreeInstanceCreationFunction = (options?: unknown) => ThreeInstance;
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The `options` argument receives the current value of `optionsRef.current` at the moment the instance is created. Use it to pass initial configuration (e.g. camera position) from React state into your Three.js setup.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## API Reference
+
+### `<ThreeProvider>`
+
+Root provider. Must wrap all components that use `useThree`, `ThreeCanvas`, or `ThreeError`.
+
+```tsx
+<ThreeProvider
+  onCreate={createInstance} // required — your ThreeInstanceCreationFunction
+  disposeOnError={true} // optional — dispose instance+renderer on error (default: true)
+  color={0x000000} // optional — WebGLRenderer clear color (default: 0x000000)
+  alpha={0} // optional — clear alpha 0–1 (default: 0; >0 enables alpha in renderer)
+  window={globalThis.window} // optional — Window reference (default: globalThis.window)
+  document={globalThis.document} // optional — Document reference (default: globalThis.document)
+>
+  {children}
+</ThreeProvider>
+```
+
+**Lifecycle managed by the provider:**
+
+- Creates `THREE.WebGLRenderer` when `<ThreeCanvas>` mounts, with `antialias: true` and `devicePixelRatio` set from the `window` prop automatically.
+- Calls `onCreate(optionsRef.current)` once to create your instance.
+- Runs `requestAnimationFrame` loop via `THREE.Timer` connected to the `document` prop; pauses delta accumulation while the tab is hidden.
+- Calls `instance.onResize(canvas)` and updates renderer size on `window.resize`.
+- Listens for `webglcontextlost` / `webglcontextrestored` on the canvas.
+  - Context lost → sets error state → `<ThreeCanvas>` unmounts, `<ThreeError>` renders.
+  - Context restored → clears error state → normal rendering resumes.
+- If `disposeOnError=true`, disposes the instance and renderer when an error occurs.
+
+---
+
+### `<ThreeCanvas>`
+
+Renders the `<canvas>` element. Accepts all standard `<canvas>` HTML attributes (e.g. `className`, `style`).
+
+```tsx
+<ThreeCanvas className='h-full w-full' />
+```
+
+- Returns `null` when there is an active error, so the canvas disappears automatically.
+- Must be rendered inside `<ThreeProvider>`.
+
+---
+
+### `<ThreeError>` (optional)
+
+A convenience component that renders its `children` only when there is an active error. Accepts all standard `<div>` HTML attributes.
+
+```tsx
+<ThreeError className='absolute inset-0 flex items-center justify-center'>
+  <p>Something went wrong.</p>
+  <button onClick={resetError}>Retry</button>
+</ThreeError>
+```
+
+- Returns `null` when there is no error.
+- Must be rendered inside `<ThreeProvider>`.
+- **This component is optional.** You can handle error rendering yourself using the `error` value from `useThree()` — see [Handling errors without `<ThreeError>`](#handling-errors-without-threeerror).
+
+---
+
+### `useThree()`
+
+Hook that returns the current `ThreeContextValue`. Must be called inside `<ThreeProvider>`.
+
+```ts
+const {
+  rendererRef, // React.RefObject<THREE.WebGLRenderer | null>
+  instanceRef, // React.RefObject<ThreeInstance | null>
+  optionsRef, // React.RefObject<unknown> — write options here before instance creation
+  error, // Error | null — current error state (never undefined)
+  resetError, // () => void — clears the error and re-triggers instance creation
+  canvasObserverRef, // internal callback ref used by <ThreeCanvas> — do not use directly
+} = useThree();
+```
+
+**Common patterns:**
+
+```ts
+// Read the renderer (e.g. to force WebGL context loss in tests)
+const gl = rendererRef.current?.getContext();
+
+// Read or call methods on your instance
+const { setCameraPosition } = instanceRef.current as MyInstance;
+
+// Sync React state into options so it's available if the instance is recreated
+useEffect(() => {
+  optionsRef.current = { cameraPosition: { x: 0, y, z } };
+}, [y, z, optionsRef]);
+```
+
+---
+
+### `WebGLContextLostError`
+
+A typed `Error` subclass thrown (and set as the error state) when the WebGL context is lost.
+
+```ts
+import { WebGLContextLostError } from '@/lib/three-next';
+
+if (error instanceof WebGLContextLostError) {
+  // show context-specific recovery UI
+}
+```
+
+---
+
+## Step-by-Step Implementation Guide
+
+### Step 1 — Implement `ThreeInstance`
+
+Create a factory function in your own module (e.g. `src/core/three/instance.ts`). Return an object that satisfies `ThreeInstance`. Add any extra methods you need on top.
+
+```ts
+import * as THREE from 'three';
+import type { ThreeInstance } from '@/lib/three-next';
+
+interface MyInstance extends ThreeInstance {
+  setCameraPosition: (x: number, y: number, z: number) => void;
+}
+
+export const createInstance = (options?: unknown): MyInstance => {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+
+  // Apply initial options
+  const opts = options as {
+    cameraPosition?: { x: number; y: number; z: number };
+  } | null;
+  const pos = opts?.cameraPosition ?? { x: 0, y: 0, z: 5 };
+  camera.position.set(pos.x, pos.y, pos.z);
+  scene.add(camera);
+
+  // Scene objects
+  const geometry = new THREE.BoxGeometry();
+  const material = new THREE.MeshStandardMaterial({ color: 0x0077ff });
+  const cube = new THREE.Mesh(geometry, material);
+  scene.add(cube);
+
+  // Optional: update — called every frame with delta in seconds. Omit if you don't need animation.
+  const update = (delta: number) => {
+    cube.rotation.x += THREE.MathUtils.degToRad(45) * delta;
+    cube.rotation.y += THREE.MathUtils.degToRad(45) * delta;
+  };
+
+  // Optional: onResize — called on canvas mount and window resize. Omit if camera aspect doesn't matter.
+  const onResize = (canvas: HTMLCanvasElement) => {
+    const { width, height } = canvas.getBoundingClientRect();
+    (camera as THREE.PerspectiveCamera).aspect = width / height;
+    (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+  };
+
+  // Optional: onRendererUpdated — called when the renderer is created or recreated.
+  // Use this to configure renderer-specific settings (e.g. shadow maps, tone mapping).
+  const onRendererUpdated = (renderer: THREE.WebGLRenderer) => {
+    renderer.shadowMap.enabled = true;
+  };
+
+  // Optional: onError — called before dispose() when an error occurs. Use for logging or cleanup.
+  const onError = (error: Error) => {
+    console.error('Three.js instance error:', error);
+  };
+
+  // Required: dispose — release GPU resources
+  const dispose = () => {
+    geometry.dispose();
+    material.dispose();
+  };
+
+  // Custom method
+  const setCameraPosition = (x: number, y: number, z: number) => {
+    camera.position.set(x, y, z);
+  };
+
+  return {
+    scene,
+    camera,
+    update,
+    onResize,
+    onRendererUpdated,
+    onError,
+    dispose,
+    setCameraPosition,
+  };
+};
+```
+
+### Step 2 — Wire up the provider and canvas
+
+Wrap your page in `<ThreeProvider>` and render `<ThreeCanvas>` for WebGL output. Handling errors is optional — pick the approach that fits your needs.
+
+**Option A — Use `error` from `useThree()` directly (recommended)**
+
+Read `error` and `resetError` from `useThree()` and write your own conditional rendering. This is the most flexible approach.
+
+```tsx
+'use client';
+
+import { ThreeProvider, ThreeCanvas, useThree } from '@/lib/three-next';
+import { createInstance } from '@/core/three';
+
+function Scene() {
+  const { error, resetError } = useThree();
+  return (
+    <div className='relative h-screen w-screen'>
+      {error ? (
+        <div className='absolute inset-0 flex items-center justify-center'>
+          <div>
+            <p>WebGL error occurred.</p>
+            <button onClick={resetError}>Retry</button>
+          </div>
+        </div>
+      ) : (
+        <ThreeCanvas className='h-full w-full' />
+      )}
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ThreeProvider onCreate={createInstance} disposeOnError color={0x333333} alpha={1}>
+      <Scene />
+    </ThreeProvider>
+  );
+}
+```
+
+**Option B — Use `<ThreeError>` component (optional convenience)**
+
+`<ThreeError>` and `<ThreeCanvas>` both read `error` internally, so they automatically swap in/out without explicit conditionals.
+
+```tsx
+'use client';
+
+import { ThreeProvider, ThreeCanvas, ThreeError, useThree } from '@/lib/three-next';
+import { createInstance } from '@/core/three';
+
+function Scene() {
+  const { resetError } = useThree();
+  return (
+    <div className='relative h-screen w-screen'>
+      <ThreeCanvas className='h-full w-full' />
+      <ThreeError className='absolute inset-0 flex items-center justify-center'>
+        <div>
+          <p>WebGL error occurred.</p>
+          <button onClick={resetError}>Retry</button>
+        </div>
+      </ThreeError>
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ThreeProvider onCreate={createInstance} disposeOnError color={0x333333} alpha={1}>
+      <Scene />
+    </ThreeProvider>
+  );
+}
+```
+
+### Step 3 — Drive React state into your instance
+
+Use `optionsRef` to push initial configuration and `instanceRef` to call methods live.
+
+```tsx
+function Scene() {
+  const { instanceRef, optionsRef } = useThree();
+  const [posY, setPosY] = useState(0);
+  const [posZ, setPosZ] = useState(5);
+
+  // Keep optionsRef in sync so instance recreations (after error reset) use current values
+  useEffect(() => {
+    optionsRef.current = { cameraPosition: { x: 0, y: posY, z: posZ } };
+  }, [posY, posZ, optionsRef]);
+
+  // Drive the live instance directly
+  useEffect(() => {
+    if (!instanceRef.current) return;
+    (instanceRef.current as MyInstance).setCameraPosition(0, posY, posZ);
+  }, [posY, posZ, instanceRef]);
+
+  return (
+    <>
+      <ThreeCanvas className='h-full w-full' />
+      <input
+        type='range'
+        min={-10}
+        max={10}
+        step={0.1}
+        value={posY}
+        onChange={e => setPosY(parseFloat(e.target.value))}
+      />
+    </>
+  );
+}
+```
+
+---
+
+## Handling errors without `<ThreeError>`
+
+`<ThreeError>` is a thin convenience wrapper — it just checks `error` from context and conditionally renders a `<div>`. You can replicate (and extend) this yourself using `error` and `resetError` from `useThree()`.
+
+```tsx
+const { error, resetError } = useThree();
+
+// Conditional render
+{
+  error ? <MyErrorUI onRetry={resetError} /> : <ThreeCanvas className='h-full w-full' />;
+}
+
+// Type-narrow the error for specific handling
+import { WebGLContextLostError } from '@/lib/three-next';
+
+if (error instanceof WebGLContextLostError) {
+  // context was lost — browser may restore it automatically
+} else if (error) {
+  // initialization or other runtime error
+}
+```
+
+`<ThreeCanvas>` already hides itself on error, so if you render your own error UI alongside it you can leave both in the tree — the canvas will unmount automatically.
+
+```tsx
+<div className='relative h-screen w-screen'>
+  <ThreeCanvas className='h-full w-full' />
+  {error && (
+    <div className='absolute inset-0 flex items-center justify-center'>
+      <button onClick={resetError}>Retry</button>
+    </div>
+  )}
+</div>
+```
+
+---
+
+## Error Handling Flow
+
+```
+webglcontextlost event  (or React render error caught by ThreeErrorBoundary)
+  → error state set (WebGLContextLostError or caught Error)
+  → instance.onError?.(error) called
+  → if disposeOnError=true: instance.dispose() + renderer.dispose()
+  → ThreeCanvas returns null  (canvas unmounts)
+  → ThreeError renders children / error UI visible
+
+webglcontextrestored event  (browser auto-restores context)
+  → error state cleared
+  → ThreeCanvas mounts again  (new canvas element)
+  → provider re-runs onCreate with current optionsRef.current
+  → instance.onRendererUpdated?.(renderer) called with new renderer
+  → animation loop resumes
+
+resetError() called manually
+  → same as context-restored path above
+```
+
+---
+
+## Exports
+
+```ts
+import {
+  ThreeProvider, // component
+  ThreeCanvas, // component
+  ThreeError, // component
+  useThree, // hook
+  WebGLContextLostError, // error class
+  type ThreeInstance, // implement this for your scene
+  type ThreeInstanceCreationFunction, // (options?: unknown) => ThreeInstance
+  type ThreeCanvasObserverFunction, // internal — rarely needed
+  type ThreeContextValue, // return type of useThree()
+} from '@/lib/three-next';
+```
+
+---
+
+## Constraints and Notes
+
+- All components and the hook require a `'use client'` boundary — they use React hooks and browser APIs.
+- The animation loop always runs (`requestAnimationFrame`). `update` and `onResize` are optional — if omitted they are simply not called. Frame rendering is skipped when `delta === 0` (tab hidden) or when `error` is set. Pause/stop logic must be implemented inside `update()` if needed.
+- `optionsRef` is a plain mutable ref (`React.RefObject<unknown>`). Writing to it does not trigger a re-render and does not recreate the instance. It is read only when `onCreate` is called (on initial mount and after `resetError`).
+- `rendererRef` and `instanceRef` are also mutable refs. Reading `.current` outside of React effects is safe for imperative operations (e.g. forcing context loss in tests).
+- `devicePixelRatio` is set automatically from `window.devicePixelRatio` when the renderer is created. You do not need to set it yourself.
+- The `window` and `document` props default to `globalThis.window` and `globalThis.document`. Pass custom references when testing in a non-browser environment (e.g. jsdom) or when you need to scope event listeners to a specific window (e.g. iframes).
