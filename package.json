@@ -1,6 +1,6 @@
 {
   "name": "@luvikung/three-next",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "A lightweight React/Next.js integration layer for Three.js. Manages the WebGL renderer lifecycle, animation loop, resize handling, WebGL context loss/restoration, and error boundaries.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -20,6 +20,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "README.md",
     "LICENSE.md",
     "CHANGELOG.md"
@@ -27,7 +28,7 @@
   "sideEffects": false,
   "peerDependencies": {
     "react": ">=18",
-    "three": ">=0.171.0"
+    "three": ">=0.184.0"
   },
   "repository": {
     "type": "git",
