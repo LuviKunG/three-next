@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 
 import { useThree, ThreeCanvas, ThreeProvider } from '@/lib/three-next';
 import { createInstance, type TestInstance } from '@/core/three';
+import useLocalStorage from '@/hooks/useLocalStorage';
 import useTheme from '@/hooks/useTheme';
 import useQueryParams from './hooks/useQueryParams';
-import useLocalStorage from '@/hooks/useLocalStorage';
 
 function PageContent(props: {
   frameRate: number | null;
@@ -18,6 +18,9 @@ function PageContent(props: {
   const { rendererRef, instanceRef, optionsRef, error, resetError } = useThree<TestInstance>();
   // Access the current theme (light/dark) for styling purposes.
   const theme = useTheme();
+
+  // State to toggle the visibility of the debugging area, hidden by default.
+  const [showDebug, setShowDebug] = useState(false);
 
   // State for camera position controls
   const [cameraPositionY, setCameraPositionY] = useLocalStorage<number>('cameraPositionY', 0);
@@ -117,112 +120,126 @@ function PageContent(props: {
           <ThreeCanvas className='h-full w-full' />
         )}
       </div>
-      <div
-        className={`absolute top-4 left-4 z-10 rounded-2xl border p-4 shadow-lg backdrop-blur ${
+      <button
+        onClick={() => setShowDebug(prev => !prev)}
+        className={`absolute top-4 left-4 z-20 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-lg backdrop-blur ${
           theme === 'dark'
             ? 'border-white/10 bg-slate-900/65 text-slate-100'
             : 'border-slate-300/70 bg-white/75 text-slate-900'
         }`}
       >
-        <div className='flex flex-col gap-2'>
-          <button
-            onClick={forceLostContext}
-            className='rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600'
-          >
-            Force Lost Context
-          </button>
-          <button
-            onClick={() => timeoutLostContext(1000)}
-            className='rounded bg-yellow-500 px-4 py-2 text-white hover:bg-yellow-600'
-          >
-            Timeout Lost Context (1 seconds)
-          </button>
-        </div>
-        <div className='mt-4 border-t border-gray-300/40 pt-4'>
-          <p className='mb-3 text-xs font-semibold uppercase tracking-widest opacity-60'>
-            Camera Controls
-          </p>
-          <div className='flex flex-col gap-4'>
-            <div>
-              <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
-                <span>Vertical (Y)</span>
-                <span className='font-mono'>{cameraPositionY.toFixed(1)}</span>
+        {showDebug ? 'Hide Debug' : 'Show Debug'}
+      </button>
+      {showDebug && (
+        <div
+          className={`absolute top-16 left-4 z-10 flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-2xl border p-2 shadow-lg backdrop-blur ${
+            theme === 'dark'
+              ? 'border-white/10 bg-slate-900/65 text-slate-100'
+              : 'border-slate-300/70 bg-white/75 text-slate-900'
+          }`}
+        >
+          <div className='scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2'>
+            <div className='flex flex-col gap-2'>
+              <button
+                onClick={forceLostContext}
+                className='rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600'
+              >
+                Force Lost Context
+              </button>
+              <button
+                onClick={() => timeoutLostContext(1000)}
+                className='rounded bg-yellow-500 px-4 py-2 text-white hover:bg-yellow-600'
+              >
+                Timeout Lost Context (1 seconds)
+              </button>
+            </div>
+            <div className='mt-4 border-t border-gray-300/40 pt-4'>
+              <p className='mb-3 text-xs font-semibold uppercase tracking-widest opacity-60'>
+                Camera Controls
+              </p>
+              <div className='flex flex-col gap-4'>
+                <div>
+                  <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+                    <span>Vertical (Y)</span>
+                    <span className='font-mono'>{cameraPositionY.toFixed(1)}</span>
+                  </div>
+                  <input
+                    type='range'
+                    min={-10}
+                    max={10}
+                    step={0.1}
+                    value={cameraPositionY}
+                    onChange={e => setCameraPositionY(parseFloat(e.target.value))}
+                    className='w-full accent-blue-500'
+                  />
+                </div>
+                <div>
+                  <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+                    <span>Distance (Z)</span>
+                    <span className='font-mono'>{cameraPositionZ.toFixed(1)}</span>
+                  </div>
+                  <input
+                    type='range'
+                    min={1}
+                    max={20}
+                    step={0.1}
+                    value={cameraPositionZ}
+                    onChange={e => setCameraPositionZ(parseFloat(e.target.value))}
+                    className='w-full accent-blue-500'
+                  />
+                </div>
               </div>
-              <input
-                type='range'
-                min={-10}
-                max={10}
-                step={0.1}
-                value={cameraPositionY}
-                onChange={e => setCameraPositionY(parseFloat(e.target.value))}
-                className='w-full accent-blue-500'
-              />
             </div>
-            <div>
-              <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
-                <span>Distance (Z)</span>
-                <span className='font-mono'>{cameraPositionZ.toFixed(1)}</span>
+            <div className='mt-4 border-t border-gray-300/40 pt-4'>
+              <p className='mb-3 text-xs font-semibold uppercase tracking-widest opacity-60'>
+                Renderer Controls
+              </p>
+              <div>
+                <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+                  <span>Frame Rate</span>
+                  <span className='font-mono'>{props.frameRate ?? '-'}</span>
+                </div>
+                <input
+                  type='range'
+                  min={1}
+                  max={120}
+                  step={1}
+                  value={props.frameRate ?? 0}
+                  onChange={e => props.setFrameRate(parseInt(e.target.value) || null)}
+                  className='w-full accent-blue-500'
+                />
+                <button
+                  onClick={() => props.setFrameRate(null)}
+                  className='mt-2 rounded bg-gray-500 px-4 py-1 text-xs text-white hover:bg-gray-600'
+                >
+                  Reset to Default
+                </button>
               </div>
-              <input
-                type='range'
-                min={1}
-                max={20}
-                step={0.1}
-                value={cameraPositionZ}
-                onChange={e => setCameraPositionZ(parseFloat(e.target.value))}
-                className='w-full accent-blue-500'
-              />
+              <div>
+                <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+                  <span>Device Pixel Ratio</span>
+                  <span className='font-mono'>{props.devicePixelRatio?.toFixed(2) ?? '-'}</span>
+                </div>
+                <input
+                  type='range'
+                  min={0.1}
+                  max={4}
+                  step={0.1}
+                  value={props.devicePixelRatio ?? 0}
+                  onChange={e => props.setDevicePixelRatio(parseFloat(e.target.value) || null)}
+                  className='w-full accent-blue-500'
+                />
+                <button
+                  onClick={() => props.setDevicePixelRatio(null)}
+                  className='mt-2 rounded bg-gray-500 px-4 py-1 text-xs text-white hover:bg-gray-600'
+                >
+                  Reset to Default
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        <div className='mt-4 border-t border-gray-300/40 pt-4'>
-          <p className='mb-3 text-xs font-semibold uppercase tracking-widest opacity-60'>
-            Renderer Controls
-          </p>
-          <div>
-            <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
-              <span>Frame Rate</span>
-              <span className='font-mono'>{props.frameRate ?? '-'}</span>
-            </div>
-            <input
-              type='range'
-              min={1}
-              max={120}
-              step={1}
-              value={props.frameRate ?? 0}
-              onChange={e => props.setFrameRate(parseInt(e.target.value) || null)}
-              className='w-full accent-blue-500'
-            />
-            <button
-              onClick={() => props.setFrameRate(null)}
-              className='mt-2 rounded bg-gray-500 px-4 py-1 text-xs text-white hover:bg-gray-600'
-            >
-              Reset to Default
-            </button>
-          </div>
-          <div>
-            <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
-              <span>Device Pixel Ratio</span>
-              <span className='font-mono'>{props.devicePixelRatio?.toFixed(2) ?? '-'}</span>
-            </div>
-            <input
-              type='range'
-              min={0.1}
-              max={4}
-              step={0.1}
-              value={props.devicePixelRatio ?? 0}
-              onChange={e => props.setDevicePixelRatio(parseFloat(e.target.value) || null)}
-              className='w-full accent-blue-500'
-            />
-            <button
-              onClick={() => props.setDevicePixelRatio(null)}
-              className='mt-2 rounded bg-gray-500 px-4 py-1 text-xs text-white hover:bg-gray-600'
-            >
-              Reset to Default
-            </button>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
