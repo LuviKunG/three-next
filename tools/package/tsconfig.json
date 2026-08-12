@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "composite": false,
+    "noEmit": false,
+    "declaration": true
+  },
+  "include": ["../../src/lib/three-next/**/*"]
+}

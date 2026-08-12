@@ -45,3 +45,8 @@ next-env.d.ts
 *.rar
 *.7z
 *.tar.gz
+
+# package release tooling (build artifacts, generated locally / in CI)
+/tools/package/dist
+/tools/package/release
+/.release-worktree

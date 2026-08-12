@@ -9,7 +9,10 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "package:build": "node scripts/build-package.mjs",
+    "package:release": "node scripts/release-package.mjs",
+    "package:release:push": "node scripts/release-package.mjs --push"
   },
   "dependencies": {
     "@types/three": "^0.184.0",
@@ -30,6 +33,7 @@
     "prettier": "^3.8.1",
     "tailwind-scrollbar": "^4.0.2",
     "tailwindcss": "^4",
+    "tsup": "^8.5.1",
     "typescript": "^5"
   },
   "lint-staged": {
