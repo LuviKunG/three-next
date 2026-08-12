@@ -6,22 +6,21 @@ import * as THREE from 'three';
  * The dispose method is required for cleaning up resources when the instance is no longer needed.
  */
 type ThreeInstance = {
-  /** The Three.js scene associated with this instance. */
-  scene: THREE.Scene;
-  /** The Three.js camera associated with this instance. */
-  camera: THREE.Camera;
   /**
    * Optional update method called on each animation frame with the delta time.
    */
   update?: (delta: number) => void;
   /**
+   * Optional render method called after update on each animation frame.
+   * When present, the provider defers all rendering to this method so the
+   * instance can choose between raw renderer.render() and a post-processing
+   * composer. When absent, the provider falls back to renderer.render().
+   */
+  render?: (renderer: THREE.WebGLRenderer, delta: number) => void;
+  /**
    * Optional method called when the canvas is resized.
    */
   onResize?: (canvas: HTMLCanvasElement) => void;
-  /**
-   * Optional method called when the renderer is updated.
-   */
-  onRendererUpdated?: (renderer: THREE.WebGLRenderer) => void;
   /**
    * Optional method called when an error occurs within the instance.
    */

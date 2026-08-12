@@ -2,16 +2,9 @@ import * as THREE from 'three';
 
 import { isDebugging } from '@/env';
 
-interface Instance {
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-  update: (delta: number) => void;
-  onResize: (canvas: HTMLCanvasElement) => void;
-  dispose: () => void;
-  setCameraPosition: (x: number, y: number, z: number) => void;
-}
+import type { TestInstance } from './types';
 
-const createInstance = (options?: unknown): Instance => {
+const createInstance = (options?: unknown): TestInstance => {
   // root scene
   const scene = new THREE.Scene();
 
@@ -63,6 +56,10 @@ const createInstance = (options?: unknown): Instance => {
     updateCube(delta);
   };
 
+  const render = (renderer: THREE.WebGLRenderer) => {
+    renderer.render(scene, camera);
+  };
+
   // Function to handle canvas resizing, updating the camera's aspect ratio and projection matrix accordingly.
   const dispose = () => {
     geometry.dispose();
@@ -78,9 +75,8 @@ const createInstance = (options?: unknown): Instance => {
   }
 
   return {
-    scene,
-    camera,
     update,
+    render,
     onResize,
     dispose,
     setCameraPosition,
@@ -88,4 +84,4 @@ const createInstance = (options?: unknown): Instance => {
 };
 
 export default createInstance;
-export type { Instance };
+export type { TestInstance };

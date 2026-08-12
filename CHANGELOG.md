@@ -17,3 +17,8 @@ All notable changes to this project will be documented in this file.
 
 - Added new `onRendererUpdated` event to notify when the renderer has been updated.
 - Added new `onError` event to handle errors during rendering.
+
+## Version 1.3.0 - August 12th, 2026
+
+- Added new `devicePixelRatio` property to support high-DPI displays.
+- Added new `frameRate` property to control the rendering frame rate.

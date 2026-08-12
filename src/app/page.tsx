@@ -3,19 +3,26 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { useThree, ThreeCanvas, ThreeProvider } from '@/lib/three-next';
-import { createInstance, type Instance } from '@/core/three';
+import { createInstance, type TestInstance } from '@/core/three';
 import useTheme from '@/hooks/useTheme';
+import useQueryParams from './hooks/useQueryParams';
+import useLocalStorage from '@/hooks/useLocalStorage';
 
-function PageContent() {
+function PageContent(props: {
+  frameRate: number | null;
+  setFrameRate: (value: number | null) => void;
+  devicePixelRatio: number | null;
+  setDevicePixelRatio: (value: number | null) => void;
+}) {
   // Access the Three.js instance and related functions from the context.
-  const { rendererRef, instanceRef, optionsRef, error, resetError } = useThree();
+  const { rendererRef, instanceRef, optionsRef, error, resetError } = useThree<TestInstance>();
   // Access the current theme (light/dark) for styling purposes.
   const theme = useTheme();
 
   // State for camera position controls
-  const [cameraPositionY, setCameraPositionY] = useState<number>(0);
+  const [cameraPositionY, setCameraPositionY] = useLocalStorage<number>('cameraPositionY', 0);
   // State for camera distance control
-  const [cameraPositionZ, setCameraPositionZ] = useState<number>(5);
+  const [cameraPositionZ, setCameraPositionZ] = useLocalStorage<number>('cameraPositionZ', 5);
 
   // Function to force a lost WebGL context on the Three.js instance, with error handling if the instance or renderer is not available.
   const forceLostContext = useCallback(() => {
@@ -73,7 +80,7 @@ function PageContent() {
   // Update camera position on the Three.js instance whenever the camera position state changes.
   useEffect(() => {
     if (!instanceRef.current) return;
-    const { setCameraPosition } = instanceRef.current as Instance;
+    const { setCameraPosition } = instanceRef.current;
     setCameraPosition(0, cameraPositionY, cameraPositionZ);
   }, [cameraPositionY, cameraPositionZ, instanceRef]);
 
@@ -168,6 +175,53 @@ function PageContent() {
             </div>
           </div>
         </div>
+        <div className='mt-4 border-t border-gray-300/40 pt-4'>
+          <p className='mb-3 text-xs font-semibold uppercase tracking-widest opacity-60'>
+            Renderer Controls
+          </p>
+          <div>
+            <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+              <span>Frame Rate</span>
+              <span className='font-mono'>{props.frameRate ?? '-'}</span>
+            </div>
+            <input
+              type='range'
+              min={1}
+              max={120}
+              step={1}
+              value={props.frameRate ?? 0}
+              onChange={e => props.setFrameRate(parseInt(e.target.value) || null)}
+              className='w-full accent-blue-500'
+            />
+            <button
+              onClick={() => props.setFrameRate(null)}
+              className='mt-2 rounded bg-gray-500 px-4 py-1 text-xs text-white hover:bg-gray-600'
+            >
+              Reset to Default
+            </button>
+          </div>
+          <div>
+            <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+              <span>Device Pixel Ratio</span>
+              <span className='font-mono'>{props.devicePixelRatio?.toFixed(2) ?? '-'}</span>
+            </div>
+            <input
+              type='range'
+              min={0.1}
+              max={4}
+              step={0.1}
+              value={props.devicePixelRatio ?? 0}
+              onChange={e => props.setDevicePixelRatio(parseFloat(e.target.value) || null)}
+              className='w-full accent-blue-500'
+            />
+            <button
+              onClick={() => props.setDevicePixelRatio(null)}
+              className='mt-2 rounded bg-gray-500 px-4 py-1 text-xs text-white hover:bg-gray-600'
+            >
+              Reset to Default
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -176,6 +230,9 @@ function PageContent() {
 export default function Home() {
   // Render the ThreeProvider at the root of the component tree, passing the createInstance function to initialize the Three.js instance, and render the PageContent inside it.
   const { window, document } = globalThis;
+
+  const { frameRate, setFrameRate, devicePixelRatio, setDevicePixelRatio } = useQueryParams();
+
   return (
     <ThreeProvider
       window={window}
@@ -183,8 +240,15 @@ export default function Home() {
       onCreate={createInstance}
       disposeOnError={true}
       alpha={0}
+      frameRate={frameRate ?? undefined}
+      devicePixelRatio={devicePixelRatio ?? undefined}
     >
-      <PageContent />
+      <PageContent
+        frameRate={frameRate}
+        setFrameRate={setFrameRate}
+        devicePixelRatio={devicePixelRatio}
+        setDevicePixelRatio={setDevicePixelRatio}
+      />
     </ThreeProvider>
   );
 }

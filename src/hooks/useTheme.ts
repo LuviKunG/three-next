@@ -6,7 +6,12 @@ const useTheme = () => {
   const [theme, setTheme] = useState<Theme>('dark');
 
   useEffect(() => {
-    const mediaQuery = globalThis.window.matchMedia('(prefers-color-scheme: dark)');
+    const window = globalThis.window;
+    if (!window || !window.matchMedia) {
+      return;
+    }
+    
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const updateTheme = (matchesDark: boolean) => {
       setTheme(matchesDark ? 'dark' : 'light');

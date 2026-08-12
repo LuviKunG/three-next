@@ -1,4 +1,5 @@
-import createInstance, { Instance } from './instance';
+import createInstance from './instance';
+import type { TestInstance } from './instance';
 
 export { createInstance };
-export type { Instance };
+export type { TestInstance };
