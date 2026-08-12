@@ -37,6 +37,7 @@ export function buildPackage() {
   for (const file of DOC_FILES) {
     fs.copyFileSync(path.join(repoRoot, file), path.join(releaseDir, file));
   }
+  fs.cpSync(path.join(repoRoot, 'docs'), path.join(releaseDir, 'docs'), { recursive: true });
 
   console.log(`[build-package] Staged @luvikung/three-next v${manifest.version} at ${path.relative(repoRoot, releaseDir)}`);
   return { releaseDir, version: manifest.version };
