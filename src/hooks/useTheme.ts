@@ -10,7 +10,7 @@ const useTheme = () => {
     if (!window || !window.matchMedia) {
       return;
     }
-    
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const updateTheme = (matchesDark: boolean) => {

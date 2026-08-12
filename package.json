@@ -25,11 +25,12 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
-    "typescript": "^5",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "tailwind-scrollbar": "^4.0.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,css,md}": [

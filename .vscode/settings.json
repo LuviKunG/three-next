@@ -63,6 +63,10 @@
     "**/*.log": true,
     "**/*.tsbuildinfo": true
   },
+  // Treat all CSS files as Tailwind CSS (enables Tailwind IntelliSense features)
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
   // Hide certain file types in explorer
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.expand": false,

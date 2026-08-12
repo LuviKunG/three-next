@@ -316,12 +316,7 @@ function Scene() {
 
 export default function Page() {
   return (
-    <ThreeProvider
-      onCreate={createInstance}
-      disposeOnError
-      color={0x333333}
-      alpha={1}
-    >
+    <ThreeProvider onCreate={createInstance} disposeOnError color={0x333333} alpha={1}>
       <Scene />
     </ThreeProvider>
   );
@@ -335,12 +330,7 @@ export default function Page() {
 ```tsx
 'use client';
 
-import {
-  ThreeProvider,
-  ThreeCanvas,
-  ThreeError,
-  useThree,
-} from '@/lib/three-next';
+import { ThreeProvider, ThreeCanvas, ThreeError, useThree } from '@/lib/three-next';
 import { createInstance } from '@/core/three';
 
 function Scene() {
@@ -360,12 +350,7 @@ function Scene() {
 
 export default function Page() {
   return (
-    <ThreeProvider
-      onCreate={createInstance}
-      disposeOnError
-      color={0x333333}
-      alpha={1}
-    >
+    <ThreeProvider onCreate={createInstance} disposeOnError color={0x333333} alpha={1}>
       <Scene />
     </ThreeProvider>
   );
@@ -401,7 +386,7 @@ function Scene() {
         max={10}
         step={0.1}
         value={posY}
-        onChange={(e) => setPosY(parseFloat(e.target.value))}
+        onChange={e => setPosY(parseFloat(e.target.value))}
       />
     </>
   );
@@ -419,11 +404,7 @@ const { error, resetError } = useThree();
 
 // Conditional render
 {
-  error ? (
-    <MyErrorUI onRetry={resetError} />
-  ) : (
-    <ThreeCanvas className='h-full w-full' />
-  );
+  error ? <MyErrorUI onRetry={resetError} /> : <ThreeCanvas className='h-full w-full' />;
 }
 
 // Type-narrow the error for specific handling
@@ -506,4 +487,5 @@ import {
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE.md](LICENSE.md) file for details.
+
 - `isReady` becomes `true` once both the instance and renderer have been successfully created. Use it to gate UI that depends on initialization being complete.

@@ -138,7 +138,13 @@ function PageContent(props: {
               : 'border-slate-300/70 bg-white/75 text-slate-900'
           }`}
         >
-          <div className='scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2'>
+          <div
+            className={`scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full min-h-0 flex-1 overflow-y-auto p-2 ${
+              theme === 'dark'
+                ? 'scrollbar-thumb-slate-500 scrollbar-track-slate-800/40'
+                : 'scrollbar-thumb-slate-400 scrollbar-track-slate-200/40'
+            }`}
+          >
             <div className='flex flex-col gap-2'>
               <button
                 onClick={forceLostContext}
