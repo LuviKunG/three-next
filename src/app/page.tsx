@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import * as THREE from 'three';
 
 import { useThree, ThreeCanvas, ThreeProvider } from '@/lib/three-next';
 import { createInstance, type TestInstance } from '@/core/three';
+import { createCustomRenderer } from '@/core/three/renderer';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import useTheme from '@/hooks/useTheme';
 import useQueryParams from './hooks/useQueryParams';
@@ -15,7 +17,18 @@ function PageContent(props: {
   setDevicePixelRatio: (value: number | null) => void;
 }) {
   // Access the Three.js instance and related functions from the context.
-  const { rendererRef, instanceRef, optionsRef, error, resetError } = useThree<TestInstance>();
+  const {
+    rendererRef,
+    instanceRef,
+    optionsRef,
+    timescale,
+    setTimescale,
+    isUpdating,
+    setIsUpdating,
+    error,
+    setError,
+    resetError,
+  } = useThree<TestInstance>();
   // Access the current theme (light/dark) for styling purposes.
   const theme = useTheme();
 
@@ -28,6 +41,8 @@ function PageContent(props: {
   const [cameraPositionZ, setCameraPositionZ] = useLocalStorage<number>('cameraPositionZ', 5);
 
   // Function to force a lost WebGL context on the Three.js instance, with error handling if the instance or renderer is not available.
+  // Only meaningful for a THREE.WebGLRenderer — a WebGPURenderer's context
+  // isn't a WebGLRenderingContext and has no 'WEBGL_lose_context' extension.
   const forceLostContext = useCallback(() => {
     if (!instanceRef.current) {
       console.warn('Instance not available to force lost context');
@@ -38,6 +53,10 @@ function PageContent(props: {
       console.warn('Renderer not available to force lost context');
       return;
     }
+    if (!(renderer instanceof THREE.WebGLRenderer)) {
+      console.warn('Forcing lost context is only supported for WebGLRenderer');
+      return;
+    }
     const gl = renderer.getContext();
     const ext = gl.getExtension('WEBGL_lose_context');
     if (ext) {
@@ -46,6 +65,7 @@ function PageContent(props: {
   }, [rendererRef, instanceRef]);
 
   // Utility function to simulate a lost WebGL context after a specified delay, then automatically restore it.
+  // Only meaningful for a THREE.WebGLRenderer — see `forceLostContext` above.
   const timeoutLostContext = useCallback(
     (delay: number) => {
       if (!instanceRef.current) {
@@ -55,6 +75,10 @@ function PageContent(props: {
       const renderer = rendererRef.current;
       if (!renderer) {
         console.warn('Renderer not available to force lost context');
+        return;
+      }
+      if (!(renderer instanceof THREE.WebGLRenderer)) {
+        console.warn('Forcing lost context is only supported for WebGLRenderer');
         return;
       }
       const gl = renderer.getContext();
@@ -68,6 +92,14 @@ function PageContent(props: {
     },
     [rendererRef, instanceRef]
   );
+
+  const testError = useCallback(() => {
+    if (!instanceRef.current) {
+      console.warn('Instance not available to test error');
+      return;
+    }
+    setError(new Error('Test error triggered'));
+  }, [instanceRef, setError]);
 
   // Update optionsRef with the latest camera position whenever it changes
   useEffect(() => {
@@ -158,6 +190,12 @@ function PageContent(props: {
               >
                 Timeout Lost Context (1 seconds)
               </button>
+              <button
+                onClick={testError}
+                className='rounded bg-purple-500 px-4 py-2 text-white hover:bg-purple-600'
+              >
+                Test Error
+              </button>
             </div>
             <div className='mt-4 border-t border-gray-300/40 pt-4'>
               <p className='mb-3 text-xs font-semibold uppercase tracking-widest opacity-60'>
@@ -202,7 +240,9 @@ function PageContent(props: {
               </p>
               <div>
                 <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
-                  <span>Frame Rate</span>
+                  <span>
+                    Frame Rate <span className='font-mono'>`frameRate`</span>
+                  </span>
                   <span className='font-mono'>{props.frameRate ?? '-'}</span>
                 </div>
                 <input
@@ -223,7 +263,9 @@ function PageContent(props: {
               </div>
               <div>
                 <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
-                  <span>Device Pixel Ratio</span>
+                  <span>
+                    Device Pixel Ratio <span className='font-mono'>`devicePixelRatio`</span>
+                  </span>
                   <span className='font-mono'>{props.devicePixelRatio?.toFixed(2) ?? '-'}</span>
                 </div>
                 <input
@@ -241,6 +283,42 @@ function PageContent(props: {
                 >
                   Reset to Default
                 </button>
+              </div>
+              <div>
+                <div className='mb-1 flex items-center justify-between text-xs opacity-70'>
+                  <span>
+                    Timescale <span className='font-mono'>`timescale`</span>
+                  </span>
+                  <span className='font-mono'>{timescale}</span>
+                </div>
+                <input
+                  type='range'
+                  min={0.0}
+                  max={2.0}
+                  step={0.1}
+                  value={timescale ?? 0}
+                  onChange={e => setTimescale(parseFloat(e.target.value))}
+                  className='w-full accent-blue-500'
+                />
+                <button
+                  onClick={() => setTimescale(1)}
+                  className='mt-2 rounded bg-gray-500 px-4 py-1 text-xs text-white hover:bg-gray-600'
+                >
+                  Reset to 1.0
+                </button>
+              </div>
+              <div>
+                <label className='flex items-center gap-2 text-xs opacity-70'>
+                  <input
+                    type='checkbox'
+                    checked={isUpdating}
+                    onChange={e => setIsUpdating(e.target.checked)}
+                    className='accent-blue-500'
+                  />
+                  <span>
+                    Update <span className='font-mono'>`isUpdating`</span>
+                  </span>
+                </label>
               </div>
             </div>
           </div>
@@ -261,6 +339,7 @@ export default function Home() {
       window={window}
       document={document}
       onCreate={createInstance}
+      onRendererCreate={createCustomRenderer}
       disposeOnError={true}
       alpha={0}
       frameRate={frameRate ?? undefined}

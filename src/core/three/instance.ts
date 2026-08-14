@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { isDebugging } from '@/env';
+import type { ThreeRenderer } from '@/lib/three-next';
 
 import type { TestInstance } from './types';
 
@@ -56,7 +57,10 @@ const createInstance = (options?: unknown): TestInstance => {
     updateCube(delta);
   };
 
-  const render = (renderer: THREE.WebGLRenderer) => {
+  // `renderer.render(scene, camera)` is common to both THREE.WebGLRenderer
+  // and THREE.WebGPURenderer, so this instance renders the same way
+  // regardless of which one `ThreeProvider` was configured with.
+  const render = (renderer: ThreeRenderer) => {
     renderer.render(scene, camera);
   };
 

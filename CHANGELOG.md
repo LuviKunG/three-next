@@ -22,8 +22,6 @@ All notable changes to this project will be documented in this file.
 
 - Added new `devicePixelRatio` property to support high-DPI displays.
 - Added new `frameRate` property to control the rendering frame rate.
-- Update the debug panel to display the current frame rate and device pixel ratio.
-- Update the styles of the debug panel to improve readability and usability.
 
 ## Version 1.3.1 - August 12th, 2026
 

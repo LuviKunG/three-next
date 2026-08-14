@@ -29,7 +29,10 @@ function git(args, { cwd = repoRoot, allowFail = false, silent = false } = {}) {
 
 function refExists(ref) {
   try {
-    execFileSync('git', ['show-ref', '--verify', '--quiet', ref], { cwd: repoRoot, stdio: 'ignore' });
+    execFileSync('git', ['show-ref', '--verify', '--quiet', ref], {
+      cwd: repoRoot,
+      stdio: 'ignore',
+    });
     return true;
   } catch {
     return false;
@@ -90,7 +93,9 @@ export function releasePackage() {
 
   console.log('\n[release-package] Prepared branches:');
   for (const r of results) {
-    console.log(`  - ${r.branch} @ ${r.headSha.slice(0, 12)}${r.committed ? '' : ' (already up to date, nothing to commit)'}`);
+    console.log(
+      `  - ${r.branch} @ ${r.headSha.slice(0, 12)}${r.committed ? '' : ' (already up to date, nothing to commit)'}`
+    );
   }
 
   if (shouldPush) {

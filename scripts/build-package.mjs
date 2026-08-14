@@ -39,7 +39,9 @@ export function buildPackage() {
   }
   fs.cpSync(path.join(repoRoot, 'docs'), path.join(releaseDir, 'docs'), { recursive: true });
 
-  console.log(`[build-package] Staged @luvikung/three-next v${manifest.version} at ${path.relative(repoRoot, releaseDir)}`);
+  console.log(
+    `[build-package] Staged @luvikung/three-next v${manifest.version} at ${path.relative(repoRoot, releaseDir)}`
+  );
   return { releaseDir, version: manifest.version };
 }
 

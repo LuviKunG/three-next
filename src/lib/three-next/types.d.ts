@@ -1,4 +1,17 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
+
+/**
+ * Union of the renderer types `ThreeProvider` knows how to drive.
+ * `THREE.WebGLRenderer` is the default, created automatically when no
+ * `onRendererCreate` is supplied. `THREE.WebGPURenderer` — imported from the
+ * `'three/webgpu'` subpath, since it is not exported from the main `'three'`
+ * entry point — can be returned from a custom `onRendererCreate` for
+ * consumers who want a WebGPU-backed instance instead. Only the members
+ * common to both (`setSize`, `setClearColor`, `setPixelRatio`, `render`,
+ * `dispose`, ...) are safe to rely on through this type.
+ */
+type ThreeRenderer = THREE.WebGLRenderer | WebGPURenderer;
 
 /**
  * Defines the structure of the ThreeInstance, which includes the scene, camera,
@@ -16,7 +29,7 @@ type ThreeInstance = {
    * instance can choose between raw renderer.render() and a post-processing
    * composer. When absent, the provider falls back to renderer.render().
    */
-  render?: (renderer: THREE.WebGLRenderer, delta: number) => void;
+  render?: (renderer: ThreeRenderer, delta: number) => void;
   /**
    * Optional method called when the canvas is resized.
    */
@@ -34,4 +47,4 @@ type ThreeInstance = {
   dispose: () => void;
 };
 
-export type { ThreeInstance };
+export type { ThreeInstance, ThreeRenderer };

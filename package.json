@@ -12,7 +12,8 @@
     "prepare": "husky",
     "package:build": "node scripts/build-package.mjs",
     "package:release": "node scripts/release-package.mjs",
-    "package:release:push": "node scripts/release-package.mjs --push"
+    "package:release:push": "node scripts/release-package.mjs --push",
+    "deploy": "node scripts/deploy-release.mjs"
   },
   "dependencies": {
     "@types/three": "^0.184.0",

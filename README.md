@@ -5,7 +5,7 @@
 </div>
 
 [![npm version](https://shields.io/npm/v/@luvikung/three-next)](https://www.npmjs.com/package/@luvikung/three-next)
-[![npm downloads](https://shields.io/npm/dm/@luvikung/three-next)](https://www.npmjs.com/package/@luvikung/three-next)
+[![npm downloads](https://shields.io/npm/dm/@luvikung/three-next)](https://npmtrends.com/@luvikung/three-next)
 [![npm license](https://shields.io/npm/l/@luvikung/three-next)](https://www.npmjs.com/package/@luvikung/three-next)
 
 A lightweight React/Next.js integration layer for Three.js. It manages the WebGL renderer lifecycle, animation loop, resize handling, WebGL context loss/restoration, and error boundaries — so you only need to implement your scene logic.
@@ -44,7 +44,7 @@ function createInstance(): ThreeInstance {
 
   const cube = new THREE.Mesh(
     new THREE.BoxGeometry(),
-    new THREE.MeshStandardMaterial({ color: 0x0077ff }),
+    new THREE.MeshStandardMaterial({ color: 0x0077ff })
   );
   scene.add(cube, new THREE.AmbientLight(0xffffff, 1));
 
