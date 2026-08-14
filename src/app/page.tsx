@@ -15,6 +15,8 @@ function PageContent(props: {
   setFrameRate: (value: number | null) => void;
   devicePixelRatio: number | null;
   setDevicePixelRatio: (value: number | null) => void;
+  disposeOnError: boolean;
+  setDisposeOnError: (value: boolean) => void;
 }) {
   // Access the Three.js instance and related functions from the context.
   const {
@@ -320,6 +322,19 @@ function PageContent(props: {
                   </span>
                 </label>
               </div>
+              <div>
+                <label className='flex items-center gap-2 text-xs opacity-70'>
+                  <input
+                    type='checkbox'
+                    checked={props.disposeOnError}
+                    onChange={e => props.setDisposeOnError(e.target.checked)}
+                    className='accent-blue-500'
+                  />
+                  <span>
+                    Dispose on Error <span className='font-mono'>`disposeOnError`</span>
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -333,6 +348,7 @@ export default function Home() {
   const { window, document } = globalThis;
 
   const { frameRate, setFrameRate, devicePixelRatio, setDevicePixelRatio } = useQueryParams();
+  const [disposeOnError, setDisposeOnError] = useState(false);
 
   return (
     <ThreeProvider
@@ -340,7 +356,7 @@ export default function Home() {
       document={document}
       onCreate={createInstance}
       onRendererCreate={createCustomRenderer}
-      disposeOnError={true}
+      disposeOnError={disposeOnError}
       alpha={0}
       frameRate={frameRate ?? undefined}
       devicePixelRatio={devicePixelRatio ?? undefined}
@@ -350,6 +366,8 @@ export default function Home() {
         setFrameRate={setFrameRate}
         devicePixelRatio={devicePixelRatio}
         setDevicePixelRatio={setDevicePixelRatio}
+        disposeOnError={disposeOnError}
+        setDisposeOnError={setDisposeOnError}
       />
     </ThreeProvider>
   );

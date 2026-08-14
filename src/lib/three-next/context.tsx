@@ -37,15 +37,23 @@ type ThreeInstanceCreationFunction = (options?: unknown) => ThreeInstance;
 
 /**
  * Type definition for the function that creates a Three.js renderer, which
- * is expected to return a new `ThreeRenderer` — a `THREE.WebGLRenderer` by
- * default, or a custom renderer such as `THREE.WebGPURenderer` (imported
+ * is expected to resolve to a new `ThreeRenderer` — a `THREE.WebGLRenderer`
+ * by default, or a custom renderer such as `THREE.WebGPURenderer` (imported
  * from `'three/webgpu'`, not the main `'three'` entry point). This function
  * is used as a callback in the ThreeProvider component to initialize the
  * renderer when the canvas element is available. The canvas parameter
  * provides the HTMLCanvasElement that will be used for rendering, allowing
  * the function to configure the renderer accordingly.
+ *
+ * Always async, so a factory can do its own setup before construction (e.g.
+ * feature-detecting WebGPU support or dynamically importing
+ * `'three/webgpu'`) without special-casing a sync return. This is
+ * independent of — and resolved before — the renderer's own async `init()`
+ * step, which the provider awaits separately once this promise resolves.
+ * A synchronous factory can simply be declared `async` (or return
+ * `Promise.resolve(renderer)`); no `await` inside it is required.
  */
-type ThreeRendererCreationFunction = (canvas: HTMLCanvasElement) => ThreeRenderer;
+type ThreeRendererCreationFunction = (canvas: HTMLCanvasElement) => Promise<ThreeRenderer>;
 
 /**
  * Type definition for the function that observes the canvas element,
@@ -330,12 +338,13 @@ function ThreeProvider({
   const [isUpdating, setIsUpdating] = useState(true);
   const isUpdatingRef = useRef(isUpdating);
 
-  const errorRef = useRef<Error | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const errorRef = useRef<Error | null>(null);
 
   const [isReady, setIsReady] = useState(false);
 
   const targetFrameRateRef = useRef<number>(0);
+  const disposeOnErrorRef = useRef(disposeOnError);
 
   // Update refs when state changes to ensure the latest values are available in callbacks and effects.
   useEffect(() => {
@@ -343,19 +352,27 @@ function ThreeProvider({
   }, [timescale]);
 
   useEffect(() => {
+    isUpdatingRef.current = isUpdating;
+  }, [isUpdating]);
+
+  useEffect(() => {
     devicePixelRatioRef.current = devicePixelRatio;
   }, [devicePixelRatio]);
 
+  useEffect(() => {
+    disposeOnErrorRef.current = disposeOnError;
+  }, [disposeOnError]);
+
+  // Clamp the target frame rate to the supported range
+  // and convert it to a frame interval in milliseconds.
+  // A missing or invalid frame rate disables the cap (0 interval),
+  // allowing the animation loop to run at the display's native refresh rate.
   useEffect(() => {
     const isValidFrameRate = frameRate !== undefined && Number.isFinite(frameRate) && frameRate > 0;
     targetFrameRateRef.current = isValidFrameRate
       ? 1000 / THREE.MathUtils.clamp(frameRate, MIN_FRAME_RATE, MAX_FRAME_RATE)
       : 0;
   }, [frameRate]);
-
-  useEffect(() => {
-    isUpdatingRef.current = isUpdating;
-  }, [isUpdating]);
 
   // Clean up the Three.js instance and renderer when the component unmounts to free up resources and prevent memory leaks.
   useEffect(() => {
@@ -366,6 +383,9 @@ function ThreeProvider({
   }, []);
 
   // Callback to set the error state, notify the instance of the error, and dispose of the instance and renderer if configured to do so. This function is used to handle errors that occur during instance creation or rendering, ensuring that the application can recover gracefully from errors without crashing.
+  // Reads `disposeOnErrorRef` rather than closing over the `disposeOnError`
+  // prop directly, so this callback's identity never changes — see the ref's
+  // doc comment above for why that matters.
   const setErrorInternal = useCallback(
     (err: Error | null) => {
       if (!err) {
@@ -377,20 +397,20 @@ function ThreeProvider({
       setError(err);
       if (instanceRef.current) {
         instanceRef.current.onError?.(err);
-        if (disposeOnError) {
+        if (disposeOnErrorRef.current) {
           instanceRef.current.dispose();
           instanceRef.current = null;
         }
       }
       if (rendererRef.current) {
-        if (disposeOnError) {
+        if (disposeOnErrorRef.current) {
           rendererRef.current.dispose();
           rendererRef.current = null;
         }
       }
       setIsReady(instanceRef.current !== null && rendererRef.current !== null);
     },
-    [disposeOnError]
+    [setError, setIsReady]
   );
 
   // Callback ref to observe the canvas element and create the Three.js instance when the canvas is available.
@@ -413,25 +433,32 @@ function ThreeProvider({
       }
       setCanvas(observedCanvas);
     },
-    [onCreate, setErrorInternal]
+    [onCreate, setIsReady, setErrorInternal]
   );
 
-  const createDefaultRenderer: ThreeRendererCreationFunction = (canvas: HTMLCanvasElement) => {
-    return new THREE.WebGLRenderer({
+  const createDefaultRenderer: ThreeRendererCreationFunction = async (
+    canvas: HTMLCanvasElement
+  ) => {
+    const renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
       alpha: alpha > 0,
     });
+    return renderer;
   };
 
-  // Create a new Three.js WebGLRenderer when the canvas is available,
-  // and configure it with the specified clear color and alpha transparency.
-  // The renderer is set to the size of the canvas element,
-  // ensuring that it matches the dimensions of the canvas for proper rendering
-  // of the Three.js scene.
+  // Create a new Three.js renderer when the canvas is available, and
+  // configure it with the specified clear color and alpha transparency.
+  // The renderer is set to the size of the canvas element, ensuring that it
+  // matches the dimensions of the canvas for proper rendering of the
+  // Three.js scene. `ThreeRendererCreationFunction` is always async (see its
+  // doc comment), so this awaits whichever factory is in play before
+  // configuring the resolved renderer.
   const createRenderer = useCallback(
-    (canvas: HTMLCanvasElement) => {
-      const renderer = onRendererCreate ? onRendererCreate(canvas) : createDefaultRenderer(canvas);
+    async (canvas: HTMLCanvasElement) => {
+      const renderer = await (onRendererCreate
+        ? onRendererCreate(canvas)
+        : createDefaultRenderer(canvas));
       renderer.setClearColor(color, alpha);
       const rect = canvas.getBoundingClientRect();
       renderer.setSize(rect.width, rect.height, false);
@@ -466,51 +493,47 @@ function ThreeProvider({
   // renderer for a ratio change would rebuild every compiled program, render
   // target and uploaded GPU resource. The effect below applies the ratio instead.
   //
-  // Renderer creation is treated as async because some renderers — notably
-  // `THREE.WebGPURenderer` — require an `init()` step to finish before
-  // `render()` can be called; calling `render()` beforehand throws.
-  // `rendererRef` is only populated once that step resolves (or immediately,
-  // for a `WebGLRenderer`, which has no such step), so the animation loop
-  // and resize handling below — which all guard on `rendererRef.current` —
-  // naturally skip rendering until the renderer is actually usable.
+  // Renderer creation has two async gaps: `createRenderer` itself (a
+  // `ThreeRendererCreationFunction` is always async, letting a custom
+  // factory do its own setup — e.g. feature-detecting WebGPU support), and
+  // the resolved renderer's own `init()` step where present — required by
+  // `THREE.WebGPURenderer` before `render()` is callable, a no-op for
+  // `WebGLRenderer`. `rendererRef` is only populated once both resolve, so
+  // the animation loop and resize handling below — which all guard on
+  // `rendererRef.current` — naturally skip rendering until the renderer is
+  // actually usable.
   useEffect(() => {
-    let cancelled = false;
     if (rendererRef.current) {
       rendererRef.current.dispose();
       rendererRef.current = null;
       setIsReady(false);
     }
     if (!canvas) return;
-    const newRenderer = createRenderer(canvas);
-    const ready = 'init' in newRenderer ? newRenderer.init() : Promise.resolve();
-    ready
-      .then(() => {
-        if (cancelled) {
-          newRenderer.dispose();
-          return;
-        }
-        rendererRef.current = newRenderer;
-        setDevicePixelRatio(devicePixelRatioRef.current ?? null);
-        instanceRef.current?.onResize?.(canvas);
-        instanceRef.current?.render?.(newRenderer, 0);
-        setIsReady(instanceRef.current !== null);
-      })
-      .catch(err => {
+    let cancelled = false;
+    (async () => {
+      const newRenderer = await createRenderer(canvas);
+      if (cancelled) {
         newRenderer.dispose();
-        setErrorInternal(err instanceof Error ? err : new Error(String(err)));
-      });
+        return;
+      }
+      rendererRef.current = newRenderer;
+      setDevicePixelRatio(devicePixelRatioRef.current ?? null);
+      instanceRef.current?.onResize?.(canvas);
+      instanceRef.current?.render?.(newRenderer, 0);
+      setIsReady(instanceRef.current !== null);
+    })().catch((err: unknown) => {
+      setErrorInternal(err instanceof Error ? err : new Error(String(err)));
+    });
     return () => {
       cancelled = true;
     };
-  }, [canvas, createRenderer, setDevicePixelRatio, setErrorInternal]);
+  }, [canvas, createRenderer, setIsReady, setDevicePixelRatio, setErrorInternal]);
 
-  // Apply the pixel ratio to the current renderer: once after it is created and
-  // again whenever the prop changes. `canvas` and `createRenderer` are listed so
-  // the ratio is re-applied to any renderer the effect above rebuilds — a fresh
-  // WebGLRenderer starts at a pixel ratio of 1 and would otherwise lose it.
+  // Apply the current device pixel ratio to the renderer whenever it changes,
+  // ensuring that the rendering resolution is updated accordingly.
   useEffect(() => {
     setDevicePixelRatio(devicePixelRatio ?? null);
-  }, [canvas, createRenderer, setDevicePixelRatio, devicePixelRatio]);
+  }, [setDevicePixelRatio, devicePixelRatio]);
 
   // Update the renderer's clear color whenever the `color` or `alpha` props change,
   // ensuring that the background color of the canvas reflects the current settings.

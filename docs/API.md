@@ -118,7 +118,7 @@ Pass `onRendererCreate` to use a renderer other than the default `THREE.WebGLRen
 import { WebGPURenderer } from 'three/webgpu'; // NOT from 'three' — see note below
 import type { ThreeRendererCreationFunction } from '@luvikung/three-next';
 
-const createRenderer: ThreeRendererCreationFunction = canvas =>
+const createRenderer: ThreeRendererCreationFunction = async canvas =>
   new WebGPURenderer({ canvas, antialias: true, alpha: true });
 
 <ThreeProvider onCreate={createInstance} onRendererCreate={createRenderer}>
@@ -126,9 +126,10 @@ const createRenderer: ThreeRendererCreationFunction = canvas =>
 </ThreeProvider>;
 ```
 
+- **`ThreeRendererCreationFunction` is always async** — declare it `async` (or return `Promise.resolve(renderer)`) even for a synchronous construction like the one above. This lets a factory do its own async setup before returning — e.g. feature-detecting `navigator.gpu` and falling back to a `WebGLRenderer`, or dynamically `import('three/webgpu')` — without a separate sync/async signature to special-case.
 - **Import `WebGPURenderer` from the `'three/webgpu'` subpath, not the main `'three'` entry point.** `THREE.WebGPURenderer` type-checks against the main import (the ambient namespace declares it) but is `undefined` at runtime there, so `new THREE.WebGPURenderer(...)` throws "not a constructor".
-- Renderers with an async `init()` step — `WebGPURenderer` is the one that ships with three.js — aren't usable immediately after construction. The provider awaits `init()` before assigning `rendererRef.current` and before the animation loop calls `instance.render?.()`, so nothing renders (and no error is thrown) until it resolves.
-- If `init()` rejects (e.g. the browser has no WebGPU support), the rejection is reported the same way a thrown `onCreate` error is: it sets the provider's error state and disposes the renderer if `disposeOnError` is true.
+- Once the factory's promise resolves, renderers with an async `init()` step — `WebGPURenderer` is the one that ships with three.js — aren't usable immediately. The provider awaits `init()` next, before assigning `rendererRef.current` and before the animation loop calls `instance.render?.()`, so nothing renders (and no error is thrown) until both steps resolve.
+- If either the factory's promise or `init()` rejects (e.g. the browser has no WebGPU support), the rejection is reported the same way a thrown `onCreate` error is: it sets the provider's error state and disposes the renderer if `disposeOnError` is true.
 - `onRendererCreate` still receives the plain `HTMLCanvasElement`; `color`/`alpha`/`devicePixelRatio` are applied the same way regardless of which renderer you return, since `setClearColor`/`setSize`/`setPixelRatio` are common to `WebGLRenderer` and `WebGPURenderer`.
 - WebGL-specific behavior — the `webglcontextlost`/`webglcontextrestored` listeners and `WebGLContextLostError` — only applies to a `WebGLRenderer`-backed canvas; a WebGPU context never fires those events, so context-loss recovery for WebGPU isn't handled by the provider.
 
