@@ -29,3 +29,7 @@ All notable changes to this project will be documented in this file.
 - Added a "Why 'three-next' not 'R3F'?" section covering customization, shader initialization, FPS capping, weight, and debuggability.
 - Moved the full API reference (architecture, prop tables, hooks, error-handling flow) to `docs/API.md`.
 - No code changes.
+
+## Version 1.3.2 - August 14th, 2026
+
+- Added new `onCreateRenderer` async callback to allow for custom renderer creation and configuration.
