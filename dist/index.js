@@ -48,6 +48,9 @@ var MAX_DEVICE_PIXEL_RATIO = 4;
 var MIN_FRAME_RATE = 1;
 var MAX_FRAME_RATE = 120;
 var useThree = () => {
+  return useThreeInternal();
+};
+var useThreeInternal = () => {
   const context = useContext(ThreeContext);
   if (!context) {
     throw new Error("useThree must be used within a ThreeProvider");
@@ -57,6 +60,7 @@ var useThree = () => {
 function ThreeProvider({
   children,
   onCreate,
+  onRendererCreate,
   window = globalThis.window,
   document = globalThis.document,
   disposeOnError = true,
@@ -69,24 +73,32 @@ function ThreeProvider({
   const rendererRef = useRef(null);
   const instanceRef = useRef(null);
   const optionsRef = useRef(null);
+  const devicePixelRatioRef = useRef(devicePixelRatio);
   const [timescale, setTimescale] = useState(1);
   const timescaleRef = useRef(timescale);
   const [isUpdating, setIsUpdating] = useState(true);
   const isUpdatingRef = useRef(isUpdating);
-  const errorRef = useRef(null);
   const [error, setError] = useState(null);
+  const errorRef = useRef(null);
   const [isReady, setIsReady] = useState(false);
   const targetFrameRateRef = useRef(0);
+  const disposeOnErrorRef = useRef(disposeOnError);
   useEffect(() => {
     timescaleRef.current = timescale;
   }, [timescale]);
   useEffect(() => {
+    isUpdatingRef.current = isUpdating;
+  }, [isUpdating]);
+  useEffect(() => {
+    devicePixelRatioRef.current = devicePixelRatio;
+  }, [devicePixelRatio]);
+  useEffect(() => {
+    disposeOnErrorRef.current = disposeOnError;
+  }, [disposeOnError]);
+  useEffect(() => {
     const isValidFrameRate = frameRate !== void 0 && Number.isFinite(frameRate) && frameRate > 0;
     targetFrameRateRef.current = isValidFrameRate ? 1e3 / THREE.MathUtils.clamp(frameRate, MIN_FRAME_RATE, MAX_FRAME_RATE) : 0;
   }, [frameRate]);
-  useEffect(() => {
-    isUpdatingRef.current = isUpdating;
-  }, [isUpdating]);
   useEffect(() => {
     return () => {
       var _a, _b;
@@ -106,20 +118,20 @@ function ThreeProvider({
       setError(err);
       if (instanceRef.current) {
         (_b = (_a = instanceRef.current).onError) == null ? void 0 : _b.call(_a, err);
-        if (disposeOnError) {
+        if (disposeOnErrorRef.current) {
           instanceRef.current.dispose();
           instanceRef.current = null;
         }
       }
       if (rendererRef.current) {
-        if (disposeOnError) {
+        if (disposeOnErrorRef.current) {
           rendererRef.current.dispose();
           rendererRef.current = null;
         }
       }
       setIsReady(instanceRef.current !== null && rendererRef.current !== null);
     },
-    [disposeOnError]
+    [setError, setIsReady]
   );
   const canvasObserverRef = useCallback(
     (observedCanvas) => {
@@ -130,22 +142,26 @@ function ThreeProvider({
           const newInstance = onCreate(optionsRef.current);
           (_a = newInstance.onResize) == null ? void 0 : _a.call(newInstance, observedCanvas);
           instanceRef.current = newInstance;
-          setIsReady(true);
+          setIsReady(instanceRef.current !== null && rendererRef.current !== null);
         } catch (err) {
           setErrorInternal(err instanceof Error ? err : new Error(String(err)));
         }
       }
       setCanvas(observedCanvas);
     },
-    [onCreate, setErrorInternal]
+    [onCreate, setIsReady, setErrorInternal]
   );
+  const createDefaultRenderer = async (canvas2) => {
+    const renderer = new THREE.WebGLRenderer({
+      canvas: canvas2,
+      antialias: true,
+      alpha: alpha > 0
+    });
+    return renderer;
+  };
   const createRenderer = useCallback(
-    (canvas2) => {
-      const renderer = new THREE.WebGLRenderer({
-        canvas: canvas2,
-        antialias: true,
-        alpha: alpha > 0
-      });
+    async (canvas2) => {
+      const renderer = await (onRendererCreate ? onRendererCreate(canvas2) : createDefaultRenderer(canvas2));
       renderer.setClearColor(color, alpha);
       const rect = canvas2.getBoundingClientRect();
       renderer.setSize(rect.width, rect.height, false);
@@ -170,14 +186,32 @@ function ThreeProvider({
     if (rendererRef.current) {
       rendererRef.current.dispose();
       rendererRef.current = null;
+      setIsReady(false);
     }
     if (!canvas) return;
-    const newRenderer = createRenderer(canvas);
-    rendererRef.current = newRenderer;
-  }, [canvas, createRenderer]);
+    let cancelled = false;
+    (async () => {
+      var _a, _b, _c, _d, _e;
+      const newRenderer = await createRenderer(canvas);
+      if (cancelled) {
+        newRenderer.dispose();
+        return;
+      }
+      rendererRef.current = newRenderer;
+      setDevicePixelRatio((_a = devicePixelRatioRef.current) != null ? _a : null);
+      (_c = (_b = instanceRef.current) == null ? void 0 : _b.onResize) == null ? void 0 : _c.call(_b, canvas);
+      (_e = (_d = instanceRef.current) == null ? void 0 : _d.render) == null ? void 0 : _e.call(_d, newRenderer, 0);
+      setIsReady(instanceRef.current !== null);
+    })().catch((err) => {
+      setErrorInternal(err instanceof Error ? err : new Error(String(err)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canvas, createRenderer, setIsReady, setDevicePixelRatio, setErrorInternal]);
   useEffect(() => {
     setDevicePixelRatio(devicePixelRatio != null ? devicePixelRatio : null);
-  }, [canvas, createRenderer, setDevicePixelRatio, devicePixelRatio]);
+  }, [setDevicePixelRatio, devicePixelRatio]);
   useEffect(() => {
     if (rendererRef.current) {
       rendererRef.current.setClearColor(color, alpha);
@@ -282,7 +316,7 @@ var context_default = ThreeProvider;
 // src/lib/three-next/components/canvas.tsx
 import { jsx as jsx2 } from "react/jsx-runtime";
 function ThreeCanvas(props) {
-  const { canvasObserverRef, error } = useThree();
+  const { canvasObserverRef, error } = useThreeInternal();
   if (error) {
     return null;
   }

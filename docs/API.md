@@ -24,12 +24,14 @@ Everything revolves around the `ThreeInstance` interface. You implement it; the 
 ```ts
 type ThreeInstance = {
   update?: (delta: number) => void; // called every frame; delta is seconds
-  render?: (renderer: THREE.WebGLRenderer, delta: number) => void; // responsible for renderer.render()
+  render?: (renderer: ThreeRenderer, delta: number) => void; // responsible for renderer.render()
   onResize?: (canvas: HTMLCanvasElement) => void; // called on mount and whenever the canvas size changes
   onError?: (error: Error) => void; // called when an error is set on the provider
   dispose: () => void; // required — called on unmount or error
 };
 ```
+
+`ThreeRenderer` is `THREE.WebGLRenderer | THREE.WebGPURenderer` — a `WebGLRenderer` unless you supply `onRendererCreate` (see below). Only the members common to both (`render`, `setSize`, `setClearColor`, `setPixelRatio`, `dispose`, ...) are safe to rely on through this type.
 
 > **Note:** `scene` and `camera` are **not** part of the `ThreeInstance` interface. They are implementation details of your factory — keep them in closure scope or in a subtype you define.
 
@@ -54,8 +56,9 @@ Root provider. Must wrap all components that use `useThree`, `ThreeCanvas`, or `
 ```tsx
 <ThreeProvider
   onCreate={createInstance} // required — your ThreeInstanceCreationFunction
+  onRendererCreate={undefined} // optional — override the default THREE.WebGLRenderer (e.g. with WebGPURenderer)
   disposeOnError={true} // optional — dispose instance+renderer on error (default: true)
-  color={0x000000} // optional — WebGLRenderer clear color (default: 0x000000)
+  color={0x000000} // optional — renderer clear color (default: 0x000000)
   alpha={0} // optional — clear alpha 0–1 (default: 0; >0 enables alpha in renderer)
   devicePixelRatio={undefined} // optional — overrides window.devicePixelRatio; clamped to 0.1–4.0
   frameRate={undefined} // optional — caps the animation loop to N FPS; clamped to 1–120 (default: uncapped)
@@ -68,7 +71,7 @@ Root provider. Must wrap all components that use `useThree`, `ThreeCanvas`, or `
 
 **Lifecycle managed by the provider:**
 
-- Creates `THREE.WebGLRenderer` when `<ThreeCanvas>` mounts, with `antialias: true`.
+- Creates the renderer when `<ThreeCanvas>` mounts: `onRendererCreate(canvas)` if supplied, otherwise a default `THREE.WebGLRenderer` with `antialias: true`. If the renderer exposes an async `init()` method (as `THREE.WebGPURenderer` does), the provider awaits it before treating the renderer as ready — `rendererRef.current` stays `null`, and the animation loop and resize handling skip rendering, until `init()` resolves. See [Custom renderers (e.g. WebGPU)](#custom-renderers-eg-webgpu) below.
 - Sets the renderer pixel ratio from the `devicePixelRatio` prop, clamped to `0.1`–`4.0`. A missing or invalid value (`undefined`, `NaN`, `Infinity`, `<= 0`) falls back to `window.devicePixelRatio`, or `1` when no `window` is available. The prop is applied live via `setPixelRatio` on the existing renderer — the renderer is never recreated for a ratio change. Because `setPixelRatio` resizes and clears the drawing buffer, the provider calls `instance.render?.(renderer, 0)` immediately afterwards so the new buffer is repainted before the browser paints, avoiding a flash.
 - Calls `onCreate(optionsRef.current)` once to create your instance.
 - Runs `requestAnimationFrame` loop via `THREE.Timer` connected to the `document` prop; pauses delta accumulation while the tab is hidden.
@@ -106,6 +109,29 @@ Notes on the pixel-ratio path:
 - `instance.onResize` is **not** called for a pixel-ratio change: the canvas CSS size is unchanged, so camera aspect and any size-derived state stay valid. Only `ResizeObserver` (an actual element size change) triggers `onResize`.
 - The ratio is applied by its own effect, separate from renderer creation, so **the renderer is never recreated for a ratio change** — recreating it would rebuild every compiled program, render target and uploaded GPU resource, and could not change the already-created WebGL context's attributes anyway.
 - That effect also runs once right after the renderer is created (and after any rebuild caused by a new canvas or a `color`/`alpha` change), because a fresh `THREE.WebGLRenderer` starts at a pixel ratio of `1` and would otherwise lose the configured value.
+
+#### Custom renderers (e.g. WebGPU)
+
+Pass `onRendererCreate` to use a renderer other than the default `THREE.WebGLRenderer`:
+
+```tsx
+import { WebGPURenderer } from 'three/webgpu'; // NOT from 'three' — see note below
+import type { ThreeRendererCreationFunction } from '@luvikung/three-next';
+
+const createRenderer: ThreeRendererCreationFunction = async canvas =>
+  new WebGPURenderer({ canvas, antialias: true, alpha: true });
+
+<ThreeProvider onCreate={createInstance} onRendererCreate={createRenderer}>
+  <Scene />
+</ThreeProvider>;
+```
+
+- **`ThreeRendererCreationFunction` is always async** — declare it `async` (or return `Promise.resolve(renderer)`) even for a synchronous construction like the one above. This lets a factory do its own async setup before returning — e.g. feature-detecting `navigator.gpu` and falling back to a `WebGLRenderer`, or dynamically `import('three/webgpu')` — without a separate sync/async signature to special-case.
+- **Import `WebGPURenderer` from the `'three/webgpu'` subpath, not the main `'three'` entry point.** `THREE.WebGPURenderer` type-checks against the main import (the ambient namespace declares it) but is `undefined` at runtime there, so `new THREE.WebGPURenderer(...)` throws "not a constructor".
+- Once the factory's promise resolves, renderers with an async `init()` step — `WebGPURenderer` is the one that ships with three.js — aren't usable immediately. The provider awaits `init()` next, before assigning `rendererRef.current` and before the animation loop calls `instance.render?.()`, so nothing renders (and no error is thrown) until both steps resolve.
+- If either the factory's promise or `init()` rejects (e.g. the browser has no WebGPU support), the rejection is reported the same way a thrown `onCreate` error is: it sets the provider's error state and disposes the renderer if `disposeOnError` is true.
+- `onRendererCreate` still receives the plain `HTMLCanvasElement`; `color`/`alpha`/`devicePixelRatio` are applied the same way regardless of which renderer you return, since `setClearColor`/`setSize`/`setPixelRatio` are common to `WebGLRenderer` and `WebGPURenderer`.
+- WebGL-specific behavior — the `webglcontextlost`/`webglcontextrestored` listeners and `WebGLContextLostError` — only applies to a `WebGLRenderer`-backed canvas; a WebGPU context never fires those events, so context-loss recovery for WebGPU isn't handled by the provider.
 
 ---
 
@@ -147,7 +173,7 @@ The hook is generic — pass your `ThreeInstance` subtype to get a typed `instan
 
 ```ts
 const {
-  rendererRef, // React.RefObject<THREE.WebGLRenderer | null>
+  rendererRef, // React.RefObject<ThreeRenderer | null> — WebGLRenderer by default, or whatever onRendererCreate returns
   instanceRef, // React.RefObject<T | null> — typed when useThree<T>() is used
   optionsRef, // React.RefObject<unknown> — write options here before instance creation
   timescale, // number — delta multiplier applied each frame (default: 1.0)
@@ -158,7 +184,6 @@ const {
   setError, // (err: Error | null) => void — manually set or clear the error state
   resetError, // () => void — clears the error and re-triggers instance creation
   isReady, // boolean — true once the instance and renderer are both initialized
-  canvasObserverRef, // internal callback ref used by <ThreeCanvas> — do not use directly
 } = useThree<MyInstance>();
 ```
 
@@ -251,8 +276,9 @@ export const createInstance = (options?: unknown): MyInstance => {
     cube.rotation.y += THREE.MathUtils.degToRad(45) * delta;
   };
 
-  // Required for anything to appear: render — call renderer.render() here
-  const render = (renderer: THREE.WebGLRenderer) => {
+  // Required for anything to appear: render — call renderer.render() here.
+  // Typed as ThreeRenderer so this also works with onRendererCreate (e.g. WebGPURenderer).
+  const render = (renderer: ThreeRenderer) => {
     renderer.render(scene, camera);
   };
 
